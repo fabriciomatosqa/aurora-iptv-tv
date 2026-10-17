@@ -8,10 +8,22 @@ import {remoteKey,registerRemoteKeys} from "./core/remote.mjs";
 import {hasTizenPlayer,startTizenPlayer,tizenPositionSeconds,toggleTizenPlayback,seekTizen,stopTizenPlayer} from "./core/tizen-player.mjs";
 import {loadCatalog,saveCatalog,loadGuide,saveGuide as saveGuideDB,deletePlaylistData} from "./core/catalog-db.mjs";
 import { focusFirst, restoreFocus, nextFocus } from "./core/focus.mjs";
+import {parseLgM3U,reclassifyLgItems,auditLgCatalog} from "./core/lg-catalog.mjs";
 
 const app = document.getElementById("app");
 const playerRoot = document.getElementById("player-root");
 const state = loadState();
+const lgTv = document.body.classList.contains("lg-tv");
+const LG_PAGE_SIZE=48;
+let lgPageItems=[], lgRendered=0, lgObserver=null;
+function resetLgPage() {
+  lgPageItems=[];lgRendered=0;
+  lgObserver?.disconnect();lgObserver=null;
+}
+function lgScrollMainTop() {
+  if (lgTv) { const main=app.querySelector("main"); if(main)main.scrollTop=0; }
+}
+
 const pages = [
   ["home", "Início", "home"], ["live", "Ao Vivo", "tv"], ["movies", "Filmes", "film"],
   ["series", "Séries", "layers"], ["football", "Futebol", "trophy"],
@@ -45,8 +57,8 @@ function stats() {
     series: groupSeries(all).length, unknown: all.filter(i=>i.type==="unknown").length };
 }
 function persist() { if (!saveState(state)) notice = "O armazenamento local está cheio. Nesta versão de teste use listas menores."; }
-function navigate(next) { if (next === route) return; history.push(route); route = next; search = ""; render(); }
-function goBack() { if (currentPlay) { closePlayer(); return; } if (history.length) { route = history.pop(); search = ""; render(); } else if (route !== "home") { route = "home"; render(); } }
+function navigate(next) { if (next === route) return; history.push(route); route = next; search = ""; resetLgPage();render();lgScrollMainTop(); }
+function goBack() { if (currentPlay) { closePlayer(); return; } if (history.length) { route = history.pop(); search = ""; resetLgPage();render();lgScrollMainTop(); } else if (route !== "home") { route = "home"; resetLgPage();render();lgScrollMainTop(); } }
 function pageShell(label) {
   return '<div class="topbar"><div class="eyebrow">' + esc(label) + '</div><div class="topright">AURORA IPTV TV · PRÉVIA 0.2.0</div></div>';
 }
@@ -64,7 +76,50 @@ function addCard(item, label = "") {
     '</div><div class="card-body"><div class="card-title">' + title +
     '</div><div class="card-tag">' + esc(item.group || (item.type === "series" ? "Série" : "Conteúdo")) + '</div></div></button>';
 }
-function cards(itemsToShow, label = "") { return '<div class="cards">' + itemsToShow.slice(0, 180).map(it => addCard(it, label)).join("") + '</div>'; }
+function cards(itemsToShow, label = "") {
+  const paged = lgTv && ["live","movies","series","favorites","unknown","details"].includes(route);
+  if(!paged)return '<div class="cards">' + itemsToShow.slice(0,180).map(it=>addCard(it,label)).join("") + '</div>';
+  lgPageItems=itemsToShow;
+  lgRendered=Math.min(itemsToShow.length,LG_PAGE_SIZE);
+  const content=itemsToShow.slice(0,lgRendered).map(it=>addCard(it,label)).join("");
+  const rest=itemsToShow.length-lgRendered;
+  return '<div class="cards" data-lg-page-grid>' + content + '</div>' +
+    '<div class="lg-paging-info" data-lg-page-info>' +
+    '<span data-lg-count>Exibindo <strong>'+lgRendered.toLocaleString("pt-BR")+'</strong> de <strong>'+itemsToShow.length.toLocaleString("pt-BR")+'</strong> conteúdos</span>' +
+    (rest ? '<button type="button" data-focus="lg-more" data-action="lg-more">Carregar mais ('+Math.min(rest,LG_PAGE_SIZE)+')</button>' : '<span>Todos os itens desta seção foram exibidos.</span>') +
+    '</div>';
+}
+function appendLgPage() {
+  if(!lgTv || !lgPageItems.length || lgRendered>=lgPageItems.length)return;
+  const grid=app.querySelector("[data-lg-page-grid]");
+  const info=app.querySelector("[data-lg-page-info]");
+  if(!grid || !info)return;
+  const end=Math.min(lgRendered+LG_PAGE_SIZE,lgPageItems.length);
+  const batch=lgPageItems.slice(lgRendered,end).map(it=>addCard(it)).join("");
+  grid.insertAdjacentHTML("beforeend",batch);
+  lgRendered=end;
+  const text=info.querySelector("[data-lg-count]");
+  if(text)text.innerHTML='Exibindo <strong>'+lgRendered.toLocaleString("pt-BR")+'</strong> de <strong>'+lgPageItems.length.toLocaleString("pt-BR")+'</strong> conteúdos';
+  const button=info.querySelector('[data-action="lg-more"]');
+  if(button) {
+    const rest=lgPageItems.length-lgRendered;
+    if(!rest) {
+      lgObserver?.disconnect();lgObserver=null;
+      button.remove();
+      info.insertAdjacentHTML("beforeend","<span>Todos os itens desta seção foram exibidos.</span>");
+    }else button.textContent="Carregar mais ("+Math.min(rest,LG_PAGE_SIZE)+")";
+  }
+}
+function observeLgPages(){
+  lgObserver?.disconnect();lgObserver=null;
+  if(!lgTv || lgRendered>=lgPageItems.length)return;
+  const root=app.querySelector("main"),more=app.querySelector('[data-action="lg-more"]');
+  if(!root || !more || !("IntersectionObserver" in window))return;
+  lgObserver=new IntersectionObserver(entries=>{
+    if(entries.some(e=>e.isIntersecting))appendLgPage();
+  },{root,rootMargin:"0px 0px 220px 0px",threshold:0});
+  lgObserver.observe(more);
+}
 const timeLabel = ms => new Intl.DateTimeFormat("pt-BR",{day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"}).format(new Date(ms));
 function epgGuide() { return activePlaylist()?.guide || {channels:[],programs:[]}; }
 function guideRows(channels) {
@@ -103,7 +158,7 @@ function catalogue(type, title) {
   if (type === "unknown") content = items().filter(i=>i.type==="unknown");
   content=content.filter(allowed);
   if (search.trim()) content = content.filter(it => it.title.toLocaleLowerCase("pt-BR").includes(search.trim().toLocaleLowerCase("pt-BR")));
-  return pageShell(title) + '<h2>' + esc(title) + '</h2><p class="subtitle">' + content.length + ' itens encontrados nesta seção</p>' +
+  return pageShell(title) + '<h2>' + esc(title) + '</h2><p class="subtitle">' + content.length.toLocaleString("pt-BR") + ' itens encontrados nesta seção</p>' +
    '<div class="searchbar"><input class="search" type="search" data-focus="search" data-input="search" placeholder="Buscar por nome..." value="' + esc(search) + '" aria-label="Buscar"></div>' +
    (content.length ? cards(content) : empty("Nenhum conteúdo nesta seção", "Adicione uma playlist ou tente uma pesquisa diferente.", !activePlaylist())) + (type==="live" ? guideRows(content) : "");
 }
@@ -132,6 +187,8 @@ function football() {
 function settings() {
   const selected = activePlaylist();
   const s = stats();
+  const audit=selected?.importAudit;
+  const lgImportInfo=lgTv&&selected?'<div class="lg-import-audit" role="status">Playlist: <strong>'+esc(selected.name)+'</strong> · Entradas M3U encontradas: <strong>'+Number(audit?.declared ?? selected.items?.length ?? 0).toLocaleString("pt-BR")+'</strong> · Importadas: <strong>'+Number(selected.items?.length||0).toLocaleString("pt-BR")+'</strong> · URLs ignoradas: <strong>'+Number(audit?.invalid||0).toLocaleString("pt-BR")+'</strong><p class="muted">Os números correspondem ao arquivo M3U recebido, não à quantidade que o provedor anuncia externamente.</p></div>':'';
   const lines = state.playlists.map(p => '<div class="playlist-line"><strong>' + esc(p.name) + (p.id===state.activeId ? ' ✓' : '') +
    '</strong><div class="actions"><button class="btn" data-focus="activate-' + esc(p.id) + '" data-action="activate" data-id="' + esc(p.id) + '">Usar</button>' +
    '<button class="btn warn" data-action="delete" data-id="' + esc(p.id) + '" data-focus="delete-' + esc(p.id) + '">Excluir</button></div></div>').join("");
@@ -145,7 +202,7 @@ function settings() {
     '<form id="pin-create"><label class="field">Criar PIN de 4 a 12 números<input name="pin" type="password" inputmode="numeric" minlength="4" maxlength="12" required data-focus="pin-create"></label>' +
     '<button class="btn primary" type="submit" data-focus="pin-create-submit">Ativar proteção +18</button></form>';
   return pageShell("Configurações") + '<h2>Configurações</h2><p class="subtitle">Gerencie suas fontes, preferências e testes de reprodução.</p>' +
-   '<div class="settings-grid"><div class="panel"><h3>Minhas playlists</h3><p>Adicione uma URL M3U ou cole o texto de uma playlist de testes.</p>' +
+   lgImportInfo + '<div class="settings-grid"><div class="panel"><h3>Minhas playlists</h3><p>Adicione uma URL M3U ou cole o texto de uma playlist de testes.</p>' +
    '<form id="playlist-form"><label class="field">Nome da playlist<input name="name" data-focus="name" placeholder="Minha playlist" required maxlength="80"></label>' +
    '<label class="field">Endereço URL (opcional ao colar M3U)<input name="url" type="url" data-focus="url" placeholder="https://.../playlist.m3u"></label>' +
    '<label class="field">Texto M3U (alternativo, para testar no PC)<textarea name="m3u" data-focus="m3u" placeholder="#EXTM3U&#10;#EXTINF:-1 group-title=..."></textarea></label>' +
@@ -170,6 +227,7 @@ function settings() {
 }
 function render(preferredFocus = "") {
   displayItems = [];
+  lgObserver?.disconnect();lgObserver=null;
   document.body.classList.toggle("theme-light", state.theme === "light");
   const nav = pages.map(([id,label,ico]) => '<button data-action="' + id + '" data-focus="nav-' + id + '" class="' + (route===id || (route==="details" && id==="series") ? "active" : "") +
    '" aria-current="' + (route===id?"page":"false") + '">' + icon(ico) + '<span>' + esc(label) + '</span></button>').join("");
@@ -181,6 +239,7 @@ function render(preferredFocus = "") {
    nav + '</nav><div class="sidebar-bottom">VERSÃO DE DESENVOLVIMENTO<br>Controle remoto: ← ↑ → ↓ · OK · Voltar</div></aside><main role="main">' +
    (notice ? '<div class="notice" role="status">' + esc(notice) + '</div>' : "") + page + '</main>';
   restoreFocus(preferredFocus || "nav-" + (route==="details"?"series":route));
+  observeLgPages();
 }
 function openItem(item) {
   if (!allowed(item)) {notice="Conteúdo restrito. Configure ou desbloqueie o PIN parental.";route="settings";render("pin-enter");return;}
@@ -295,11 +354,11 @@ async function savePlaylist(form) {
     if (!text) {
       text=await loadRemoteText(url);
     }
-    const parsed=parseM3U(text);
+    const parsed=lgTv?parseLgM3U(text):parseM3U(text);
     if (!parsed.count) throw new Error("Nenhuma entrada de vídeo válida foi encontrada.");
     const id=(globalThis.crypto?.randomUUID?.() || String(Date.now()));
     await saveCatalog(id,parsed.items);
-    state.playlists.push({id,name,url,items:parsed.items,guideUrl:parsed.guideUrl,guide:null,updatedAt:Date.now(),lastAttemptDay:localDay()});
+    state.playlists.push({id,name,url,items:parsed.items,guideUrl:parsed.guideUrl,guide:null,importAudit:lgTv?{declared:parsed.declared,invalid:parsed.invalid}:null,updatedAt:Date.now(),lastAttemptDay:localDay()});
     state.activeId=id; notice="Playlist importada: " + parsed.count + " entradas válidas.";
     persist(); render("nav-settings");
   } catch(error) { notice="Não foi possível importar: " + (error instanceof Error ? error.message : "erro desconhecido") + ". Confira o formato e, para URL, as permissões CORS."; render("name"); }
@@ -309,11 +368,12 @@ async function refreshActive({quiet=false, playlist=activePlaylist()}={}) {
   playlist.lastAttemptDay=localDay();
   persist();
   try{
-    const parsed=parseM3U(await loadRemoteText(playlist.url));
+    const parsed=lgTv?parseLgM3U(await loadRemoteText(playlist.url)):parseM3U(await loadRemoteText(playlist.url));
     if(!parsed.count)throw new Error("A lista recebida está vazia.");
     const merge=mergePlaylist(playlist.items,parsed.items);
     await saveCatalog(playlist.id,merge.items);
     playlist.items=merge.items;playlist.updatedAt=Date.now();
+    if(lgTv)playlist.importAudit={declared:parsed.declared,invalid:parsed.invalid};
     if(parsed.guideUrl)playlist.guideUrl=parsed.guideUrl;
     if(!quiet){notice="Atualização concluída: "+merge.added+" itens novos, sem apagar os antigos.";persist();render("nav-settings");}
     else persist();
@@ -351,11 +411,12 @@ app.addEventListener("click",event=>{
   const target=event.target.closest("[data-action]"); if (!target) return;
   const action=target.dataset.action;
   if (pages.some(p=>p[0]===action) || action==="unknown") navigate(action);
+  else if (action==="lg-more") appendLgPage();
   else if (action==="item") openItem(displayItems[Number(target.dataset.index)]);
   else if (action==="test") startPlayer(testItem);
   else if (action==="back") goBack();
   else if (action==="favorite-series" && currentSeries) favorite(currentSeries);
-  else if (action==="activate") {state.activeId=target.dataset.id;search="";persist();render("nav-settings");}
+  else if (action==="activate") {state.activeId=target.dataset.id;search="";resetLgPage();persist();render("nav-settings");}
   else if (action==="delete") {
     const id=target.dataset.id;
     if (!confirm("Excluir esta playlist e o catálogo local associado?")) return;
@@ -374,7 +435,7 @@ app.addEventListener("submit",event=>{
 });
 app.addEventListener("input",event=>{
   if(event.target.dataset.input!=="search") return;
-  const cursor=event.target.selectionStart;search=event.target.value;render("search");
+  const cursor=event.target.selectionStart;search=event.target.value;resetLgPage();render("search");
   const input=app.querySelector('[data-input="search"]');if(input&&cursor!==null)input.setSelectionRange(cursor,cursor);
 });
 app.addEventListener("change",event=>{
@@ -431,6 +492,11 @@ async function hydrateCatalogs() {
     for(const p of state.playlists) {
       if(Array.isArray(p.items) && p.items.length) await saveCatalog(p.id,p.items);
       else p.items=(await loadCatalog(p.id))||[];
+      if(lgTv) {
+        const corrected=reclassifyLgItems(p.items);
+        if(corrected)await saveCatalog(p.id,p.items);
+        if(!p.importAudit)p.importAudit={declared:p.items.length,invalid:0};
+      }
       if(p.guide?.programs?.length) await saveGuideDB(p.id,p.guide);
       else p.guide=(await loadGuide(p.id))||null;
     }
