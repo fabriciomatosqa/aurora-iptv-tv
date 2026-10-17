@@ -94,3 +94,26 @@ details summary{cursor:pointer;color:#95e8cf}
 .football-teams strong{color:#6de8c4}
 .football-time{margin-top:14px;color:#b0cad5;font-size:14px}
 @media(max-width:690px){.football-list{grid-template-columns:minmax(0,1fr)}}
+
+/* Accessible light theme (preview) */
+.theme-light{background:#edf5f7;color:#132936;--focus:#168d79}
+.theme-light .sidebar{background:linear-gradient(180deg,#e0f2f1,#e9f4f8);border-right:1px solid #adc9cc;filter:none}
+.theme-light .nav button{color:#365568}
+.theme-light .nav button.active{color:#074b4a;background:#a6e2d155;box-shadow:inset 3px 0 #149e8c}
+.theme-light .nav button:hover,.theme-light .nav button:focus-visible{background:#c1e5e1;color:#083837}
+.theme-light main{filter:none}
+.theme-light h1,.theme-light h2,.theme-light h3{color:#0e2c3b}
+.theme-light p,.theme-light .subtitle,.theme-light .muted,.theme-light .section-head span,.theme-light .topbar .eyebrow{color:#365769}
+.theme-light .topbar .topright,.theme-light .sidebar-bottom{color:#476b7a}
+.theme-light .hero{background:radial-gradient(ellipse at 85% 115%,#67bbd27a 0,transparent 46%),linear-gradient(120deg,#d2e9ed,#b8e0d8 65%,#acd6e6);border-color:#6caaab}
+.theme-light .hero .kicker{color:#0c786b}
+.theme-light .hero p{color:#245462}
+.theme-light .card,.theme-light .panel,.theme-light .stat,.theme-light .empty{background:#f8fcfd;color:#112d3e;border-color:#abc9d4}
+.theme-light .card-title,.theme-light .stat strong{color:#173847}
+.theme-light .card-tag,.theme-light .stat span{color:#557585}
+.theme-light .field{color:#284c5e}
+.theme-light .field input,.theme-light .field textarea,.theme-light .field select,.theme-light .search{background:white;color:#102f3e;border-color:#a2c3cb}
+.theme-light .btn:not(.primary){background:#e5f0f3;color:#174154;border-color:#93b5bf}
+.theme-light .btn.primary{background:#117b6c;border-color:#117b6c;color:white}
+.theme-light .playlist-line,.theme-light .football-row{background:#e8f4f5;color:#163847;border-color:#aacbd0}
+.theme-light .guide-row span,.theme-light .football-time{color:#3b6475}
