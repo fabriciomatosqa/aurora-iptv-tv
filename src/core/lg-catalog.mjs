@@ -24,8 +24,9 @@ function typeFor(item) {
   if(broadcast)return "live";
   if(LIVE_GROUP.test(group)&&!MOVIE_GROUP.test(group)&&!SERIES_GROUP.test(group))return "live";
   if(mixed){
-    // The provider's "Movies and Series" can also include actual TV channels.
-    // Leave ambiguous VOD unclassified instead of inventing its media type.
+    // A direct movie-file extension is additional, source-supplied VOD evidence.
+    if(/\.(?:mp4|mkv|avi|mov)(?:[?#]|$)/i.test(url))return "movies";
+    // Unidentifiable formats must not leak channel brands into movie catalogues.
     return "unknown";
   }
   if(MOVIE_GROUP.test(group))return "movies";
