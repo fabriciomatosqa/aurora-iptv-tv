@@ -427,3 +427,397 @@ body.lg-tv.theme-light .lg-paging-info button {
 @media(max-width:860px) {
   body.lg-tv .lg-paging-info { flex-direction:column; align-items:stretch; }
 }
+
+
+/* ================================================================
+   AURORA LG webOS — Home dashboard and two-level library navigation
+   Scope: .lg-tv only. Android TV and Samsung retain their own UI.
+   ================================================================ */
+
+body.lg-tv #app.lg-home-mode {
+  display:block;
+  width:100%;
+  min-height:0;
+  height:100vh;
+  background:linear-gradient(125deg,rgba(3,12,27,.85),rgba(7,27,47,.7)),
+    radial-gradient(ellipse 90% 70% at 74% 10%,#15547a75,transparent 65%),
+    #061423;
+}
+body.lg-tv #app.lg-home-mode:before {
+  content:"";
+  position:fixed;
+  pointer-events:none;
+  inset:-28% -10% 35% 2%;
+  background:linear-gradient(141deg,transparent 31%,rgba(16,155,169,.08) 38%,
+    rgba(60,221,176,.12) 43%,rgba(87,115,227,.10) 49%,transparent 58%);
+  transform:skewY(-8deg);
+  filter:blur(1px);
+}
+body.lg-tv .lg-home-shell {
+  position:relative;
+  z-index:1;
+  width:100%;
+  height:100vh;
+  padding:25px clamp(28px,4.3vw,80px) 22px;
+  display:flex;
+  flex-direction:column;
+  min-height:0;
+  overflow-x:hidden;
+  overflow-y:auto;
+  color:#f4fbff;
+}
+body.lg-tv .lg-home-header {
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  min-height:70px;
+  flex:0 0 auto;
+  border-bottom:1px solid rgba(151,217,225,.11);
+}
+body.lg-tv .lg-home-brand {display:flex;align-items:center;gap:14px;line-height:1.0;}
+body.lg-tv .lg-home-brand-icon {
+  display:block;
+  width:52px;height:52px;flex:0 0 52px;
+  border-radius:16px;
+  background:linear-gradient(135deg,#4be5c2 5%,#4e9dda 49%,#b280ea 92%);
+  box-shadow:0 0 22px rgba(73,235,195,.22),inset 0 0 15px rgba(255,255,255,.24);
+  clip-path:polygon(16% 13%,52% 0%,88% 20%,100% 50%,76% 87%,42% 100%,0% 78%,0% 32%);
+}
+body.lg-tv .lg-home-brand strong{display:block;font-size:25px;font-weight:850;letter-spacing:2.8px;}
+body.lg-tv .lg-home-brand small{display:block;margin-top:6px;font-size:11px;letter-spacing:4.4px;color:#98c4d2;font-weight:700;}
+body.lg-tv .lg-home-header-actions{display:flex;align-items:center;gap:26px;}
+body.lg-tv .lg-home-time{font-size:19px;font-weight:600;color:#c0d9e6;font-variant-numeric:tabular-nums;}
+body.lg-tv .lg-home-settings {
+  display:grid;place-items:center;
+  background:rgba(19,48,73,.62);
+  border:1px solid rgba(148,210,223,.25);
+  border-radius:13px;
+  color:#deeff6;
+  width:52px;height:52px;
+}
+body.lg-tv .lg-home-settings .lg-icon{height:27px;width:27px;}
+body.lg-tv .lg-home-settings:hover{background:rgba(37,87,109,.8);}
+body.lg-tv .lg-home-intro {
+  display:flex;
+  justify-content:space-between;
+  align-items:end;
+  gap:24px;
+  flex:0 0 auto;
+  margin:26px 0 22px;
+}
+body.lg-tv .lg-home-eyebrow {
+  display:block;
+  font-size:13px;font-weight:850;letter-spacing:3px;
+  color:#8ef9d9;margin-bottom:11px;
+}
+body.lg-tv .lg-home-intro h1 {
+  font-size:clamp(31px,3.05vw,56px);
+  letter-spacing:-1px;line-height:1.17;
+  font-weight:800;
+}
+body.lg-tv .lg-home-intro h1 em{
+  font-style:normal;
+  color:#95f4df;
+}
+body.lg-tv .lg-home-intro p{
+  color:#aac8d8;
+  font-size:17px;
+  margin-top:7px;
+}
+body.lg-tv .lg-home-list-pill{
+  font-size:14px;
+  max-width:240px;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+  display:flex;align-items:center;gap:9px;
+  padding:12px 17px;
+  border:1px solid rgba(129,209,201,.21);
+  border-radius:25px;
+  color:#c2e3e4;
+  background:rgba(15,50,65,.63);
+  flex-shrink:0;
+}
+body.lg-tv .lg-home-list-dot{width:9px;height:9px;flex:0 0 9px;border-radius:50%;background:#5ee8b4;box-shadow:0 0 12px #5ee8b480;}
+body.lg-tv .lg-home-tiles {
+  flex:1 1 auto;
+  min-height:320px;
+  max-height:470px;
+  display:grid;
+  grid-template-columns:minmax(0,3.05fr) minmax(195px,1fr);
+  gap:18px;
+}
+body.lg-tv .lg-home-primary {
+  min-width:0;
+  display:grid;
+  grid-template-columns:repeat(3,minmax(0,1fr));
+  gap:18px;
+}
+body.lg-tv .lg-home-shortcuts{min-width:0;display:grid;grid-template-rows:repeat(2,minmax(0,1fr));gap:18px;}
+body.lg-tv .lg-home-tile {
+  position:relative;
+  text-align:left;
+  isolation:isolate;
+  overflow:hidden;
+  border-radius:19px;
+  border:1px solid rgba(130,189,223,.33);
+  background:linear-gradient(151deg,#173859,#18314f);
+  padding:23px 22px 18px;
+  color:#f4fbff;
+  display:flex;
+  flex-direction:column;
+  align-items:stretch;
+  min-width:0;
+  cursor:pointer;
+  transition:border-color .16s ease,transform .16s ease,box-shadow .16s ease;
+}
+body.lg-tv .lg-home-tile:before {
+  content:"";position:absolute;inset:0;
+  background:linear-gradient(144deg,rgba(216,253,255,.065),transparent 44%),
+    radial-gradient(circle at 85% 25%,rgba(157,227,253,.13),transparent 55%);
+  pointer-events:none;z-index:-1;
+}
+body.lg-tv .lg-home-tile:after {
+  content:"";position:absolute;inset:-60% -35% auto -35%;height:75%;
+  transform:rotate(-21deg);
+  border-bottom:2px solid rgba(112,215,234,.09);
+  box-shadow:0 14px 23px rgba(41,178,214,.06);
+  pointer-events:none;z-index:-1;
+}
+body.lg-tv .lg-tile-live{background:linear-gradient(145deg,#13314f 8%,#1c4772 95%);}
+body.lg-tv .lg-tile-movies{background:linear-gradient(145deg,#133948 8%,#205c68 95%);}
+body.lg-tv .lg-tile-series{background:linear-gradient(145deg,#222b58 8%,#493568 95%);}
+body.lg-tv .lg-tile-favorites{background:linear-gradient(135deg,#243d60 8%,#285178 95%);}
+body.lg-tv .lg-tile-history{background:linear-gradient(135deg,#1b374e 8%,#1b4e63 95%);}
+body.lg-tv .lg-tile-symbol {
+  display:grid;
+  place-items:center;
+  width:100%;flex:1 1 auto;
+  min-height:90px;
+  color:#95cfff;
+  filter:drop-shadow(0 12px 18px rgba(7,20,41,.2));
+}
+body.lg-tv .lg-tile-live .lg-tile-symbol{color:#a4d1ff;}
+body.lg-tv .lg-tile-movies .lg-tile-symbol{color:#9eebf0;}
+body.lg-tv .lg-tile-series .lg-tile-symbol{color:#c1abf9;}
+body.lg-tv .lg-tile-favorites .lg-tile-symbol{color:#d1c4ff;}
+body.lg-tv .lg-tile-history .lg-tile-symbol{color:#96d7ef;}
+body.lg-tv .lg-icon {width:29px;height:29px;flex-shrink:0;}
+body.lg-tv .lg-tile-large .lg-tile-symbol .lg-icon {width:111px;height:111px;stroke-width:1.25;}
+body.lg-tv .lg-tile-small {flex-direction:row;flex-wrap:wrap;align-items:center;gap:5px 12px;padding:18px 21px;}
+body.lg-tv .lg-tile-small .lg-tile-symbol {flex:0 0 70px;min-height:65px;width:70px;}
+body.lg-tv .lg-tile-small .lg-tile-symbol .lg-icon{width:63px;height:63px;stroke-width:1.3;}
+body.lg-tv .lg-tile-copy{display:block;}
+body.lg-tv .lg-tile-name{display:block;font-size:clamp(25px,2.45vw,40px);font-weight:800;letter-spacing:-.6px;line-height:1.18;}
+body.lg-tv .lg-tile-description{display:block;margin-top:10px;font-size:16px;color:#b8d3e3;line-height:1.5;max-width:230px;}
+body.lg-tv .lg-tile-bottom {
+  display:flex;align-items:center;justify-content:space-between;
+  gap:12px;margin-top:20px;color:#b8e8f0;
+}
+body.lg-tv .lg-tile-total{font-size:14px;font-weight:650;}
+body.lg-tv .lg-tile-arrow{display:grid;place-items:center;width:32px;height:32px;border:1px solid rgba(191,239,236,.25);border-radius:50%;}
+body.lg-tv .lg-tile-arrow .lg-icon{width:17px;height:17px;}
+body.lg-tv .lg-tile-small .lg-tile-copy{flex:1 1 100px;}
+body.lg-tv .lg-tile-small .lg-tile-name{font-size:clamp(22px,2vw,31px);}
+body.lg-tv .lg-tile-small .lg-tile-description{font-size:14px;margin-top:7px;}
+body.lg-tv .lg-tile-small .lg-tile-bottom{flex:1 0 100%;margin:2px 0 0 0;}
+body.lg-tv .lg-home-tile:hover,
+body.lg-tv .lg-home-tile:focus-visible {
+  transform:translateY(-3px);
+  border-color:#b3ffe8;
+  outline:3px solid #b4ffe7;outline-offset:3px;
+  box-shadow:0 0 0 7px rgba(68,231,184,.13),0 20px 30px rgba(0,6,18,.34);
+}
+body.lg-tv .lg-home-footer{
+  flex:0 0 auto;
+  min-height:58px;
+  margin-top:16px;
+  display:flex;justify-content:space-between;align-items:center;
+  gap:18px;
+  color:#91afbf;
+  font-size:12px;font-weight:700;letter-spacing:1.4px;
+}
+body.lg-tv .lg-home-quick{display:flex;align-items:center;gap:12px;}
+body.lg-tv .lg-home-quick button{
+  display:flex;align-items:center;justify-content:center;gap:8px;
+  padding:9px 17px;border:1px solid #477282;border-radius:24px;
+  background:rgba(24,60,78,.75);color:#dcf7f7;font-size:15px;letter-spacing:0;
+  min-height:43px;
+}
+body.lg-tv .lg-home-quick .lg-icon{width:21px;height:21px;}
+body.lg-tv .lg-home-quick button:focus-visible,
+body.lg-tv .lg-home-settings:focus-visible {
+  outline:3px solid #b4ffe7;outline-offset:3px;
+}
+body.lg-tv .lg-home-notice{
+  position:fixed;z-index:20;top:12px;left:50%;
+  transform:translateX(-50%);
+  max-width:680px;
+  box-shadow:0 14px 40px #020b19b0;
+}
+
+/* Fixed main navigation + independent secondary subcategory column */
+body.lg-tv #app.lg-library-mode{
+  grid-template-columns:188px 232px minmax(0,1fr);
+  grid-template-rows:minmax(0,1fr);
+}
+body.lg-tv #app.lg-library-mode .sidebar{
+  padding:21px 10px 17px;
+  gap:12px;
+  height:100vh;
+}
+body.lg-tv #app.lg-library-mode .logo{height:70px;padding:2px 8px 12px;}
+body.lg-tv #app.lg-library-mode .logo-mark{width:38px;height:38px;}
+body.lg-tv #app.lg-library-mode .logo-name{font-size:19px;}
+body.lg-tv #app.lg-library-mode .logo-sub{font-size:9px;letter-spacing:2.2px;}
+body.lg-tv #app.lg-library-mode .nav{
+  flex:1 1 auto;
+  min-height:0;
+  gap:5px;
+  overflow-y:auto;
+  overflow-x:hidden;
+  align-content:start;
+}
+body.lg-tv #app.lg-library-mode .nav button{
+  font-size:16px;
+  min-height:48px;
+  padding:9px 11px;
+  gap:11px;
+  flex:0 0 auto;
+}
+body.lg-tv #app.lg-library-mode .nav .icon{width:21px;height:21px;}
+body.lg-tv #app.lg-library-mode .sidebar-bottom{font-size:11px;padding:5px 9px;}
+body.lg-tv .lg-secondary{
+  position:relative;
+  display:flex;flex-direction:column;
+  height:100vh;max-height:100vh;
+  min-height:0;
+  background:linear-gradient(180deg,#0f2536,#0a1a2b);
+  border-right:1px solid rgba(142,204,217,.18);
+  overflow:hidden;
+}
+body.lg-tv .lg-secondary-heading {
+  padding:32px 15px 18px;
+  border-bottom:1px solid rgba(143,192,209,.12);
+}
+body.lg-tv .lg-rail-kicker{display:block;color:#65d2b3;font-size:11px;font-weight:850;letter-spacing:1.6px;margin-bottom:11px;}
+body.lg-tv .lg-secondary-heading h2{
+  font-size:22px;letter-spacing:-.3px;line-height:1.2;
+  margin-bottom:6px;color:#ecf8ff;
+}
+body.lg-tv .lg-secondary-heading p{font-size:13px;color:#9fbcca;}
+body.lg-tv .lg-secondary-list {
+  flex:1 1 auto;
+  min-height:0;
+  padding:10px 9px 30px;
+  display:flex;flex-direction:column;
+  gap:5px;
+  overflow-y:auto;
+  overflow-x:hidden;
+  overscroll-behavior:contain;
+}
+body.lg-tv .lg-secondary-item {
+  border-radius:11px;
+  border:1px solid transparent;
+  background:transparent;
+  color:#a9c3d1;
+  font-size:15px;
+  padding:13px 10px;
+  text-align:left;
+  display:flex;align-items:center;justify-content:space-between;
+  gap:9px;
+  min-height:51px;
+  cursor:pointer;
+}
+body.lg-tv .lg-secondary-item.selected {
+  color:#e5fff8;
+  background:linear-gradient(90deg,rgba(45,128,111,.42),rgba(16,68,78,.39));
+  border-color:rgba(107,230,194,.38);
+  box-shadow:inset 3px 0 #6fe7bd;
+}
+body.lg-tv .lg-secondary-item:hover,
+body.lg-tv .lg-secondary-item:focus-visible{
+  color:#fff;
+  background:#25545b;
+  outline:2px solid #a8f8dc;outline-offset:1px;
+}
+body.lg-tv .lg-secondary-label{min-width:0;word-break:break-word;line-height:1.32;font-weight:620;}
+body.lg-tv .lg-secondary-count{
+  flex:0 0 auto;font-size:11px;font-weight:750;
+  color:#a6d8ce;
+  background:rgba(124,188,184,.13);
+  border:1px solid rgba(143,206,202,.12);
+  border-radius:20px;
+  padding:4px 7px;font-variant-numeric:tabular-nums;
+}
+body.lg-tv #app.lg-library-mode main {padding:26px 27px 55px;}
+body.lg-tv #app.lg-library-mode .topbar{min-height:22px;margin-bottom:15px;}
+body.lg-tv #app.lg-library-mode .topbar .topright{font-size:11px;}
+body.lg-tv #app.lg-library-mode main>h2{font-size:33px;line-height:1.12;margin-bottom:7px;}
+body.lg-tv #app.lg-library-mode .subtitle{font-size:16px;margin:4px 0 18px;}
+body.lg-tv #app.lg-library-mode .searchbar{max-width:none;margin-bottom:22px;}
+body.lg-tv #app.lg-library-mode .search{font-size:17px;min-height:54px;}
+body.lg-tv #app.lg-library-mode .cards {grid-template-columns:repeat(3,minmax(0,1fr));gap:17px;}
+body.lg-tv #app.lg-library-mode .card-art {height:133px;}
+body.lg-tv #app.lg-library-mode .card {min-height:213px;}
+body.lg-tv #app.lg-library-mode .card-title{font-size:17px;}
+body.lg-tv #app.lg-library-mode .card-tag{font-size:12px;margin-top:6px;}
+body.lg-tv.theme-light .lg-secondary {background:#e0f0f2;border-right-color:#95bdc5;}
+body.lg-tv.theme-light .lg-secondary-heading h2{color:#204858;}
+body.lg-tv.theme-light .lg-secondary-heading p{color:#4b7080;}
+body.lg-tv.theme-light .lg-secondary-item{color:#335e70;}
+body.lg-tv.theme-light .lg-secondary-item.selected{color:#0c574a;background:#a4ded2;}
+body.lg-tv.theme-light .lg-secondary-count{color:#1e7164;background:#c3e5df;}
+
+@media(min-width:1600px){
+  body.lg-tv .lg-home-shell {padding:36px clamp(58px,5vw,112px) 30px;}
+  body.lg-tv .lg-home-intro{margin:41px 0 32px;}
+  body.lg-tv .lg-home-tiles{gap:25px;min-height:380px;max-height:630px;}
+  body.lg-tv .lg-home-primary,body.lg-tv .lg-home-shortcuts{gap:25px;}
+  body.lg-tv .lg-tile-large .lg-tile-symbol .lg-icon{width:149px;height:149px;}
+  body.lg-tv .lg-tile-name{font-size:42px;}
+  body.lg-tv .lg-tile-description{font-size:19px;}
+  body.lg-tv #app.lg-library-mode{grid-template-columns:238px 285px minmax(0,1fr);}
+  body.lg-tv #app.lg-library-mode main{padding:38px 48px 70px;}
+  body.lg-tv #app.lg-library-mode .cards{grid-template-columns:repeat(4,minmax(0,1fr));gap:21px;}
+  body.lg-tv #app.lg-library-mode .card-art{height:165px;}
+  body.lg-tv #app.lg-library-mode .card{min-height:262px;}
+  body.lg-tv #app.lg-library-mode .card-title{font-size:20px;}
+  body.lg-tv .lg-secondary-heading{padding:40px 19px 24px;}
+  body.lg-tv .lg-secondary-item{font-size:18px;padding:14px;}
+}
+@media(max-width:1100px){
+  body.lg-tv .lg-home-shell{padding:18px 24px 17px;}
+  body.lg-tv .lg-home-intro{margin:17px 0 16px;}
+  body.lg-tv .lg-home-tiles{gap:11px;}
+  body.lg-tv .lg-home-primary,body.lg-tv .lg-home-shortcuts{gap:11px;}
+  body.lg-tv .lg-home-tile{padding:15px;}
+  body.lg-tv .lg-tile-large .lg-tile-symbol .lg-icon{width:77px;height:77px;}
+  body.lg-tv .lg-tile-name{font-size:25px;}
+  body.lg-tv .lg-tile-description{font-size:14px;}
+  body.lg-tv #app.lg-library-mode{grid-template-columns:155px 197px minmax(0,1fr);}
+  body.lg-tv #app.lg-library-mode .sidebar{padding:18px 7px;}
+  body.lg-tv #app.lg-library-mode .nav button{font-size:14px;padding:7px;}
+  body.lg-tv .lg-secondary-heading{padding:23px 9px 15px;}
+  body.lg-tv .lg-secondary-item{font-size:13px;padding:10px 8px;}
+  body.lg-tv #app.lg-library-mode main{padding:21px 18px 45px;}
+  body.lg-tv #app.lg-library-mode .cards{grid-template-columns:repeat(2,minmax(0,1fr));}
+}
+@media(max-width:740px){
+  body.lg-tv .lg-home-tiles{display:flex;flex-direction:column;max-height:none;min-height:0;}
+  body.lg-tv .lg-home-primary{grid-template-columns:repeat(3,minmax(0,1fr));}
+  body.lg-tv .lg-home-shortcuts{grid-template-columns:repeat(2,minmax(0,1fr));grid-template-rows:130px;}
+  body.lg-tv .lg-tile-large .lg-tile-symbol .lg-icon{width:48px;height:48px;}
+  body.lg-tv .lg-tile-description{display:none;}
+  body.lg-tv .lg-tile-name{font-size:17px;}
+  body.lg-tv .lg-home-footer>span{display:none;}
+  body.lg-tv #app.lg-library-mode{grid-template-columns:65px 148px minmax(0,1fr);}
+  body.lg-tv #app.lg-library-mode .logo-name,body.lg-tv #app.lg-library-mode .logo-sub,
+  body.lg-tv #app.lg-library-mode .nav span,body.lg-tv #app.lg-library-mode .sidebar-bottom{display:none;}
+  body.lg-tv #app.lg-library-mode .nav button{justify-content:center;}
+  body.lg-tv #app.lg-library-mode .cards{grid-template-columns:repeat(1,minmax(0,1fr));}
+  body.lg-tv .lg-home-time{display:none;}
+}
+@media(prefers-reduced-motion:reduce){
+  body.lg-tv .lg-home-tile{transition:none;}
+}
