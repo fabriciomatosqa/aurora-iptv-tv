@@ -35,7 +35,7 @@ function safeMedia(v) { try { const u = new URL(v); return ["http:", "https:"].i
 const testItem = { title: "Vídeo livre de demonstração (CC0)", group: "Demonstração", type: "movies", logo: "", url: "https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4" };
 let route = "home", history = [], search = "", currentSeries = null, currentPlay = null;
 let displayItems = [], notice = "", lastPositionUpdate = -1, hideTimer = null, returnFocusKey = "";
-let parentUnlocked = false, pinFailures = 0, pinBlockedUntil = 0, tizenPlaying = false;
+let parentUnlocked = false, pinFailures = 0, pinBlockedUntil = 0, tizenPlaying = false, tizenEnded = false;
 function allowed(item) { return !isRestricted(item) || (Boolean(state.parental) && parentUnlocked); }
 function activePlaylist() { return state.playlists.find(p => p.id === state.activeId) || null; }
 function items() { return activePlaylist()?.items || []; }
@@ -212,7 +212,7 @@ function startPlayer(item) {
       '<div id="tizen-player-error" role="alert"></div></div>';
     tizenPlaying=startTizenPlayer(url,state.positions[key]||0,
       msg=>{const box=playerRoot.querySelector("#tizen-player-error");if(box)box.textContent=msg;},
-      ()=>{delete state.positions[key];persist();closePlayer();});
+      ()=>{tizenEnded=true;delete state.positions[key];persist();closePlayer();});
     if(tizenPlaying){playerRoot.querySelector('[data-action="close-player"]')?.focus();scheduleHideControls();return;}
     playerRoot.innerHTML="";
   }
@@ -245,8 +245,8 @@ function closePlayer() {
   if (!currentPlay) return;
   if(tizenPlaying){
     const key=itemKey(currentPlay,state.activeId),seconds=tizenPositionSeconds();
-    if(seconds>0 && state.positions[key]!==0)state.positions[key]=Math.floor(seconds);
-    stopTizenPlayer();tizenPlaying=false;persist();clearTimeout(hideTimer);
+    if(seconds>0 && !tizenEnded)state.positions[key]=Math.floor(seconds);
+    stopTizenPlayer();tizenPlaying=false;tizenEnded=false;persist();clearTimeout(hideTimer);
     playerRoot.innerHTML="";currentPlay=null;render(returnFocusKey);returnFocusKey="";return;
   }
   const vid=playerRoot.querySelector("video");
@@ -270,9 +270,19 @@ async function saveGuide(form) {
     const guide=parseXMLTV(xml);
     if(!guide.programs.length)throw Error("O XMLTV não contém programas válidos.");
     await saveGuideDB(p.id,guide);
-    p.guide=guide;if(url)p.guideUrl=url;
+    p.guide=guide;if(url)p.guideUrl=url;p.lastGuideAttemptDay=localDay();
     persist();notice="Guia importado: "+guide.programs.length+" programas.";render("nav-settings");
   }catch(err){notice="Não foi possível importar XMLTV: "+err.message+". Verifique também CORS.";render("nav-settings");}
+}
+async function refreshGuideQuiet(playlist) {
+  if(!playlist?.guideUrl || playlist.lastGuideAttemptDay===localDay())return;
+  playlist.lastGuideAttemptDay=localDay();persist();
+  try {
+    const newGuide=parseXMLTV(await loadRemoteText(playlist.guideUrl));
+    if(!newGuide.programs.length) return;
+    await saveGuideDB(playlist.id,newGuide);
+    playlist.guide=newGuide;persist();
+  } catch { /* Never erase last known valid guide on connectivity/CORS failures. */ }
 }
 async function savePlaylist(form) {
   const data = new FormData(form);
@@ -428,6 +438,7 @@ async function hydrateCatalogs() {
     render();
     const active=activePlaylist();
     if(needsDailyUpdate(active))setTimeout(()=>refreshActive({quiet:true,playlist:active}),1200);
+    if(active?.guideUrl && active.lastGuideAttemptDay!==localDay())setTimeout(()=>refreshGuideQuiet(active),2200);
   } catch {
     notice="Este navegador não conseguiu acessar o banco local. O catálogo pode não persistir após fechar o app.";
     render();
