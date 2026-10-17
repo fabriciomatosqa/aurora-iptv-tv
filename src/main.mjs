@@ -77,6 +77,7 @@ function stats() {
 }
 function persist() { if (!saveState(state)) notice = "O armazenamento local está cheio. Nesta versão de teste use listas menores."; }
 function navigate(next) { if (next === route) return; history.push(route);
+  if(lgTv)notice=""; // Success/error notices belong to the originating screen, not subsequent views.
   if(lgTv && next!=="details"){lgSelectedGroup="__all__";lgRailQuery.first="";lgRailQuery.second="";lgRailLimit.first=100;lgRailLimit.second=120;}
   route = next; search = ""; resetLgPage();render();lgScrollMainTop(); }
 function goBack() { if (currentPlay) { closePlayer(); return; } if (history.length) { route = history.pop(); search = ""; resetLgPage();render();lgScrollMainTop(); } else if (route !== "home") { route = "home"; resetLgPage();render();lgScrollMainTop(); } }
