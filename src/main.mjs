@@ -5,6 +5,7 @@ import { loadRemoteText, hasNativePlayer, startNative } from "./core/native.mjs"
 import {isRestricted,createPin,verifyPin} from "./core/parental.mjs";
 import {needsDailyUpdate,localDay,mergePlaylist} from "./core/updates.mjs";
 import {remoteKey,registerRemoteKeys} from "./core/remote.mjs";
+import {loadCatalog,saveCatalog,loadGuide,saveGuide as saveGuideDB,deletePlaylistData} from "./core/catalog-db.mjs";
 import { focusFirst, restoreFocus, nextFocus } from "./core/focus.mjs";
 
 const app = document.getElementById("app");
@@ -251,6 +252,7 @@ async function saveGuide(form) {
     if(!xml) xml=await loadRemoteText(url);
     const guide=parseXMLTV(xml);
     if(!guide.programs.length)throw Error("O XMLTV não contém programas válidos.");
+    await saveGuideDB(p.id,guide);
     p.guide=guide;if(url)p.guideUrl=url;
     persist();notice="Guia importado: "+guide.programs.length+" programas.";render("nav-settings");
   }catch(err){notice="Não foi possível importar XMLTV: "+err.message+". Verifique também CORS.";render("nav-settings");}
@@ -269,6 +271,7 @@ async function savePlaylist(form) {
     const parsed=parseM3U(text);
     if (!parsed.count) throw new Error("Nenhuma entrada de vídeo válida foi encontrada.");
     const id=(globalThis.crypto?.randomUUID?.() || String(Date.now()));
+    await saveCatalog(id,parsed.items);
     state.playlists.push({id,name,url,items:parsed.items,guideUrl:parsed.guideUrl,guide:null,updatedAt:Date.now(),lastAttemptDay:localDay()});
     state.activeId=id; notice="Playlist importada: " + parsed.count + " entradas válidas.";
     persist(); render("nav-settings");
@@ -282,6 +285,7 @@ async function refreshActive({quiet=false, playlist=activePlaylist()}={}) {
     const parsed=parseM3U(await loadRemoteText(playlist.url));
     if(!parsed.count)throw new Error("A lista recebida está vazia.");
     const merge=mergePlaylist(playlist.items,parsed.items);
+    await saveCatalog(playlist.id,merge.items);
     playlist.items=merge.items;playlist.updatedAt=Date.now();
     if(parsed.guideUrl)playlist.guideUrl=parsed.guideUrl;
     if(!quiet){notice="Atualização concluída: "+merge.added+" itens novos, sem apagar os antigos.";persist();render("nav-settings");}
@@ -328,6 +332,7 @@ app.addEventListener("click",event=>{
   else if (action==="delete") {
     const id=target.dataset.id;
     if (!confirm("Excluir esta playlist e o catálogo local associado?")) return;
+    void deletePlaylistData(id).catch(()=>{notice="Não foi possível remover completamente o cache anterior.";});
     state.playlists=state.playlists.filter(p=>p.id!==id);
     if(state.activeId===id)state.activeId=state.playlists[0]?.id||null;
     persist();render("nav-settings");
@@ -386,6 +391,23 @@ window.auroraNativePlaybackEnded=(key,seconds,ended)=>{
   else if(Number.isFinite(seconds)&&seconds>=0)state.positions[key]=seconds;
   persist();currentPlay=null;render(returnFocusKey);returnFocusKey="";
 };
+async function hydrateCatalogs() {
+  // Migrates legacy localStorage content without discarding favorites or positions.
+  try {
+    for(const p of state.playlists) {
+      if(Array.isArray(p.items) && p.items.length) await saveCatalog(p.id,p.items);
+      else p.items=(await loadCatalog(p.id))||[];
+      if(p.guide?.programs?.length) await saveGuideDB(p.id,p.guide);
+      else p.guide=(await loadGuide(p.id))||null;
+    }
+    persist();
+    render();
+    const active=activePlaylist();
+    if(needsDailyUpdate(active))setTimeout(()=>refreshActive({quiet:true,playlist:active}),1200);
+  } catch {
+    notice="Este navegador não conseguiu acessar o banco local. O catálogo pode não persistir após fechar o app.";
+    render();
+  }
+}
 render();
-
-setTimeout(()=>{const playlist=activePlaylist();if(needsDailyUpdate(playlist))refreshActive({quiet:true,playlist});},1200);
+void hydrateCatalogs();
