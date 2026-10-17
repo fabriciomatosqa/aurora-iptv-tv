@@ -275,7 +275,31 @@
 .lg-tv .guide-row strong { font-size: 18px; }
 .lg-tv .guide-row span { font-size: 16px; }
 
-.lg-tv.theme-light .sidebar { filter: none; }
+.lg-tv.theme-light {
+  background: #e9f3f5;
+  color: #153445;
+}
+.lg-tv.theme-light .sidebar {
+  filter: none;
+  background: linear-gradient(180deg, #e4f3f1, #dcecf0);
+  border-right-color: rgba(38, 116, 125, .25);
+}
+.lg-tv.theme-light .sidebar-bottom,
+.lg-tv.theme-light .logo-sub,
+.lg-tv.theme-light .topbar .topright { color: #4b7383; }
+.lg-tv.theme-light .nav button { color: #2a5665; }
+.lg-tv.theme-light .nav button.active {
+  background: #c6e8e3;
+  border-color: #65aba4;
+  color: #0e6155;
+  box-shadow: inset 4px 0 #159a81;
+}
+.lg-tv.theme-light .search {
+  background: #fff;
+  color: #143b4d;
+  border-color: #98b9c2;
+}
+.lg-tv.theme-light .search::placeholder { color: #5c7885; }
 .lg-tv.theme-light main { filter: none; }
 .lg-tv.theme-light .card,
 .lg-tv.theme-light .panel,
