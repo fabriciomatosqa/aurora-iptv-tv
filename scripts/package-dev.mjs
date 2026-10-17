@@ -19,6 +19,14 @@ for (const platform of ["samsung-tizen", "lg-webos"]) {
     const html=await readFile(dir+"/index.html","utf8");
     await writeFile(dir+"/index.html",html.replace("</head>",'  <script src="$WEBAPIS/webapis/webapis.js"></script>\n</head>'));
   }
-  else { await copyFile("apps/lg-webos/appinfo.json", dir + "/appinfo.json"); await copyFile("dist/branding/icon.png",dir+"/icon.png"); await copyFile("dist/branding/largeicon.png",dir+"/largeicon.png"); }
+  else {
+    // LG TV has a dedicated UI shell and styles. Android/Tizen share their existing shell.
+    await copyFile("apps/lg-webos/index.html", dir + "/index.html");
+    await copyFile("apps/lg-webos/lg-tv.css", dir + "/lg-tv.css");
+    await copyFile("apps/lg-webos/lg-ui.mjs", dir + "/lg-ui.mjs");
+    await copyFile("apps/lg-webos/appinfo.json", dir + "/appinfo.json");
+    await copyFile("dist/branding/icon.png", dir + "/icon.png");
+    await copyFile("dist/branding/largeicon.png", dir + "/largeicon.png");
+  }
   console.log("Unpacked development directory:", dir);
 }
