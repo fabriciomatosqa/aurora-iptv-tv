@@ -2,6 +2,8 @@ import { parseM3U, groupSeries } from "./core/playlist.mjs";
 import { loadState, saveState, itemKey } from "./core/storage.mjs";
 import { parseXMLTV, currentAndNext, footballFromEpg } from "./core/epg.mjs";
 import { loadRemoteText, hasNativePlayer, startNative } from "./core/native.mjs";
+import {isRestricted,createPin,verifyPin} from "./core/parental.mjs";
+import {needsDailyUpdate,localDay,mergePlaylist} from "./core/updates.mjs";
 import { focusFirst, restoreFocus, nextFocus } from "./core/focus.mjs";
 
 const app = document.getElementById("app");
@@ -30,6 +32,8 @@ function safeMedia(v) { try { const u = new URL(v); return ["http:", "https:"].i
 const testItem = { title: "Vídeo livre de demonstração (CC0)", group: "Demonstração", type: "movies", logo: "", url: "https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4" };
 let route = "home", history = [], search = "", currentSeries = null, currentPlay = null;
 let displayItems = [], notice = "", lastPositionUpdate = -1, hideTimer = null, returnFocusKey = "";
+let parentUnlocked = false, pinFailures = 0, pinBlockedUntil = 0;
+function allowed(item) { return !isRestricted(item) || (Boolean(state.parental) && parentUnlocked); }
 function activePlaylist() { return state.playlists.find(p => p.id === state.activeId) || null; }
 function items() { return activePlaylist()?.items || []; }
 function stats() {
@@ -63,7 +67,7 @@ function epgGuide() { return activePlaylist()?.guide || {channels:[],programs:[]
 function guideRows(channels) {
   const guide=epgGuide();
   if(!guide.programs.length)return "";
-  const rows=channels.slice(0,60).map(item=>{
+  const rows=channels.filter(allowed).slice(0,60).map(item=>{
     const n=currentAndNext(item,guide);
     if(!n.current&&!n.next)return "";
     const index=displayItems.push(item)-1;
@@ -75,7 +79,7 @@ function guideRows(channels) {
 }
 function home() {
   const s = stats(), playlist = activePlaylist();
-  const recent = state.recent.filter(it => !it.playlistId || it.playlistId === state.activeId).slice(0, 5);
+  const recent = state.recent.filter(it => (!it.playlistId || it.playlistId === state.activeId) && allowed(it)).slice(0, 5);
   const total = s.live + s.movies + s.series;
   return pageShell("Seu entretenimento, sua escolha") +
     '<div class="hero"><div class="hero-inner"><div class="kicker">Experiência feita para televisão</div>' +
@@ -86,7 +90,7 @@ function home() {
     '<section><div class="section-head"><h2>Continuar assistindo</h2><span>' + (recent.length ? "Últimos conteúdos" : "Ainda não há histórico") + '</span></div>' +
     (recent.length ? cards(recent) : empty("Sua próxima história começa aqui", "Reproduza um conteúdo para encontrá-lo nesta seção.")) + '</section>' +
     '<section><div class="section-head"><h2>Sua biblioteca</h2><span>' + total + " títulos identificados" + '</span></div>' +
-    (total ? cards([...items().filter(i=>i.type==="live").slice(0, 3), ...items().filter(i=>i.type==="movies").slice(0, 3), ...groupSeries(items()).slice(0, 3)]) :
+    (total ? cards([...items().filter(i=>i.type==="live" && allowed(i)).slice(0, 3), ...items().filter(i=>i.type==="movies" && allowed(i)).slice(0, 3), ...groupSeries(items()).filter(allowed).slice(0, 3)]) :
     empty("Adicione sua primeira playlist", "O aplicativo não inclui canais, filmes ou séries. Use somente fontes às quais você tenha acesso legítimo.", true)) + '</section>' +
     (s.unknown ? '<p class="muted">' + s.unknown + ' entradas sem classificação confiável. Consulte Configurações; elas não são exibidas incorretamente como canais ou filmes.</p>' : "");
 }
@@ -94,6 +98,7 @@ function catalogue(type, title) {
   let content = type === "series" ? groupSeries(items()) : items().filter(i=>i.type===type);
   if (type === "favorites") content = [...items().filter(i=>state.favorites.includes(itemKey(i,state.activeId)) && i.type!=="series"), ...groupSeries(items()).filter(i=>state.favorites.includes(itemKey(i,state.activeId)))];
   if (type === "unknown") content = items().filter(i=>i.type==="unknown");
+  content=content.filter(allowed);
   if (search.trim()) content = content.filter(it => it.title.toLocaleLowerCase("pt-BR").includes(search.trim().toLocaleLowerCase("pt-BR")));
   return pageShell(title) + '<h2>' + esc(title) + '</h2><p class="subtitle">' + content.length + ' itens encontrados nesta seção</p>' +
    '<div class="searchbar"><input class="search" type="search" data-focus="search" data-input="search" placeholder="Buscar por nome..." value="' + esc(search) + '" aria-label="Buscar"></div>' +
@@ -109,7 +114,7 @@ function seriesDetails() {
    '<section><h2>Episódios disponíveis</h2>' + cards(currentSeries.episodes) + '</section>';
 }
 function football() {
-  const matches=footballFromEpg(items(), epgGuide());
+  const matches=footballFromEpg(items().filter(allowed), epgGuide());
   const rows=matches.slice(0,100).map(match=>{
     const index=displayItems.push(match.channel)-1;
     const now=Date.now(),p=match.program;
@@ -127,6 +132,15 @@ function settings() {
   const lines = state.playlists.map(p => '<div class="playlist-line"><strong>' + esc(p.name) + (p.id===state.activeId ? ' ✓' : '') +
    '</strong><div class="actions"><button class="btn" data-focus="activate-' + esc(p.id) + '" data-action="activate" data-id="' + esc(p.id) + '">Usar</button>' +
    '<button class="btn warn" data-action="delete" data-id="' + esc(p.id) + '" data-focus="delete-' + esc(p.id) + '">Excluir</button></div></div>').join("");
+  const pinSection=state.parental ?
+    '<form id="pin-unlock"><label class="field">PIN parental<input data-focus="pin-enter" type="password" inputmode="numeric" name="pin" minlength="4" maxlength="12" required></label>' +
+    '<button class="btn primary" type="submit" data-focus="pin-submit">'+(parentUnlocked?'Verificar novamente':'Desbloquear conteúdos +18')+'</button></form>' +
+    (parentUnlocked?'<button class="btn" data-action="parent-lock" data-focus="parent-lock">Bloquear agora</button>':'') +
+    '<form id="pin-change"><label class="field">PIN atual<input name="current" type="password" inputmode="numeric" minlength="4" maxlength="12" required data-focus="pin-old"></label>' +
+    '<label class="field">Novo PIN<input name="next" type="password" inputmode="numeric" minlength="4" maxlength="12" required data-focus="pin-next"></label>' +
+    '<button class="btn" type="submit" data-focus="pin-change">Alterar PIN</button></form>' :
+    '<form id="pin-create"><label class="field">Criar PIN de 4 a 12 números<input name="pin" type="password" inputmode="numeric" minlength="4" maxlength="12" required data-focus="pin-create"></label>' +
+    '<button class="btn primary" type="submit" data-focus="pin-create-submit">Ativar proteção +18</button></form>';
   return pageShell("Configurações") + '<h2>Configurações</h2><p class="subtitle">Gerencie suas fontes, preferências e testes de reprodução.</p>' +
    '<div class="settings-grid"><div class="panel"><h3>Minhas playlists</h3><p>Adicione uma URL M3U ou cole o texto de uma playlist de testes.</p>' +
    '<form id="playlist-form"><label class="field">Nome da playlist<input name="name" data-focus="name" placeholder="Minha playlist" required maxlength="80"></label>' +
@@ -140,6 +154,8 @@ function settings() {
    '<label class="field">Texto XMLTV para testes (opcional)<textarea name="xml" data-focus="epg-text" placeholder="&lt;tv&gt;...&lt;/tv&gt;"></textarea></label>' +
    '<button type="submit" class="btn primary" data-focus="epg-save">Importar programação</button></form>' +
    '<p class="muted">'+(selected?.guide?.programs?.length||0)+' programas salvos nesta playlist. Arquivos XMLTV.gz ainda exigem descompactação no servidor ou suporte específico.</p></div>' +
+   '<div class="panel"><h3>Controle parental</h3><p>Conteúdos +18 ficam ocultos até o PIN ser autorizado nesta sessão.</p>' +
+     pinSection + '<p class="muted">O PIN é protegido com PBKDF2 e salt. O bloqueio limita a interface, não criptografa listas no armazenamento local.</p></div>' +
    '<div class="panel"><h3>Aparência e testes</h3>' +
    '<label class="field">Tema<select id="theme" data-focus="theme"><option value="dark"' + (state.theme==="dark"?" selected":"") + '>Escuro</option><option value="light"' + (state.theme==="light"?" selected":"") + '>Claro (experimental)</option></select></label>' +
    '<div class="actions"><button class="btn" data-action="test" data-focus="test-video">' + icon("play") + ' Vídeo CC0</button>' +
@@ -147,7 +163,7 @@ function settings() {
    '<p class="muted">Ativa: ' + esc(selected?.name || "Nenhuma") + '</p><p class="muted">Itens sem tipo confiável: ' + s.unknown + '</p>' +
    (s.unknown ? '<button class="btn" data-focus="unknown" data-action="unknown">Visualizar não classificados</button>' : "") +
    '<p class="muted">A prévia salva dados no armazenamento do navegador: não use credenciais privadas para testes públicos ou compartilhados.</p>' +
-   '<p class="muted">PIN parental, 20 idiomas e players nativos: planejados, ainda não concluídos.</p></div></div>';
+   '<p class="muted">20 idiomas e suporte completo a todas as APIs de TV continuam em desenvolvimento.</p></div></div>';
 }
 function render(preferredFocus = "") {
   displayItems = [];
@@ -164,6 +180,7 @@ function render(preferredFocus = "") {
   restoreFocus(preferredFocus || "nav-" + (route==="details"?"series":route));
 }
 function openItem(item) {
+  if (!allowed(item)) {notice="Conteúdo restrito. Configure ou desbloqueie o PIN parental.";route="settings";render("pin-enter");return;}
   if (item.type === "series" && Array.isArray(item.episodes)) {
     currentSeries = item; navigate("details"); return;
   }
@@ -251,24 +268,53 @@ async function savePlaylist(form) {
     const parsed=parseM3U(text);
     if (!parsed.count) throw new Error("Nenhuma entrada de vídeo válida foi encontrada.");
     const id=(globalThis.crypto?.randomUUID?.() || String(Date.now()));
-    state.playlists.push({id,name,url,items:parsed.items,guideUrl:parsed.guideUrl,guide:null,updatedAt:Date.now()});
+    state.playlists.push({id,name,url,items:parsed.items,guideUrl:parsed.guideUrl,guide:null,updatedAt:Date.now(),lastAttemptDay:localDay()});
     state.activeId=id; notice="Playlist importada: " + parsed.count + " entradas válidas.";
     persist(); render("nav-settings");
   } catch(error) { notice="Não foi possível importar: " + (error instanceof Error ? error.message : "erro desconhecido") + ". Confira o formato e, para URL, as permissões CORS."; render("name"); }
 }
-async function refreshActive() {
-  const p=activePlaylist(); if (!p?.url) return;
-  try {
-    const parsed=parseM3U(await loadRemoteText(p.url));
-    if (!parsed.count) throw new Error("A lista recebida está vazia.");
-    const seen=new Set(p.items.map(i=>i.url));
-    let added=0;
-    for (const item of parsed.items) if (!seen.has(item.url)) { p.items.push(item);seen.add(item.url);added++; }
-    p.updatedAt=Date.now(); if (parsed.guideUrl) p.guideUrl=parsed.guideUrl;
-    notice="Atualização concluída. " + added + " itens novos; o catálogo anterior foi preservado.";
-    persist();render("nav-settings");
-  } catch(error) { notice="Atualização falhou. Seus dados anteriores continuam salvos. " + (error instanceof Error?error.message:"");render("nav-settings"); }
+async function refreshActive({quiet=false, playlist=activePlaylist()}={}) {
+  if(!playlist?.url)return;
+  playlist.lastAttemptDay=localDay();
+  persist();
+  try{
+    const parsed=parseM3U(await loadRemoteText(playlist.url));
+    if(!parsed.count)throw new Error("A lista recebida está vazia.");
+    const merge=mergePlaylist(playlist.items,parsed.items);
+    playlist.items=merge.items;playlist.updatedAt=Date.now();
+    if(parsed.guideUrl)playlist.guideUrl=parsed.guideUrl;
+    if(!quiet){notice="Atualização concluída: "+merge.added+" itens novos, sem apagar os antigos.";persist();render("nav-settings");}
+    else persist();
+  }catch(error){
+    if(!quiet){notice="Atualização falhou. Seus dados foram preservados. Verifique a conexão ou CORS.";render("nav-settings");}
+  }
 }
+async function handlePin(form) {
+  const formData=new FormData(form);
+  const mode=form.id;
+  if(Date.now()<pinBlockedUntil){notice="Muitas tentativas. Tente novamente após 30 segundos.";render("nav-settings");return;}
+  try{
+    if(mode==="pin-create"){
+      state.parental=await createPin(String(formData.get("pin")||""));parentUnlocked=true;
+      notice="Proteção parental ativada.";persist();render("nav-settings");return;
+    }
+    if(mode==="pin-unlock"){
+      if(!await verifyPin(String(formData.get("pin")||""),state.parental))throw Error("PIN incorreto");
+      parentUnlocked=true;pinFailures=0;notice="Conteúdos +18 liberados nesta sessão.";render("nav-settings");return;
+    }
+    if(mode==="pin-change"){
+      if(!await verifyPin(String(formData.get("current")||""),state.parental))throw Error("PIN atual incorreto");
+      state.parental=await createPin(String(formData.get("next")||""));
+      parentUnlocked=true;pinFailures=0;notice="PIN alterado.";persist();render("nav-settings");return;
+    }
+  }catch(error){
+    pinFailures++;
+    if(pinFailures>=5){pinBlockedUntil=Date.now()+30_000;pinFailures=0;}
+    notice="Não foi possível validar o PIN. Verifique os 4 a 12 números.";
+    render("nav-settings");
+  }
+}
+
 app.addEventListener("click",event=>{
   const target=event.target.closest("[data-action]"); if (!target) return;
   const action=target.dataset.action;
@@ -286,10 +332,12 @@ app.addEventListener("click",event=>{
     persist();render("nav-settings");
   }
   else if (action==="refresh") refreshActive();
+  else if (action==="parent-lock"){parentUnlocked=false;notice="Conteúdo +18 bloqueado.";render("nav-settings");}
 });
 app.addEventListener("submit",event=>{
   if(event.target.id==="playlist-form"){ event.preventDefault();savePlaylist(event.target); }
   if(event.target.id==="epg-form"){ event.preventDefault();saveGuide(event.target); }
+  if(event.target.id.startsWith("pin-")){event.preventDefault();handlePin(event.target);}
 });
 app.addEventListener("input",event=>{
   if(event.target.dataset.input!=="search") return;
@@ -329,3 +377,5 @@ window.auroraNativePlaybackEnded=(key,seconds,ended)=>{
   persist();currentPlay=null;render(returnFocusKey);returnFocusKey="";
 };
 render();
+
+setTimeout(()=>{const playlist=activePlaylist();if(needsDailyUpdate(playlist))refreshActive({quiet:true,playlist});},1200);
