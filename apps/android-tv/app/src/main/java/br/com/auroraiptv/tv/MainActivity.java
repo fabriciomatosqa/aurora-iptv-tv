@@ -9,6 +9,7 @@ import java.net.URL;
 import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
 import java.util.concurrent.Executors;
+import java.util.concurrent.ExecutorService;
 import android.content.Intent;
 import android.content.res.Configuration;
 import android.net.Uri;
@@ -29,6 +30,7 @@ public class MainActivity extends Activity {
     private static final int PLAY_REQUEST = 300;
     private static final String HOME = "https://appassets.androidplatform.net/index.html";
     private WebView browser;
+    private final ExecutorService networking = Executors.newFixedThreadPool(2);
 
     @Override public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -66,7 +68,7 @@ public class MainActivity extends Activity {
 
     public final class PlaybackBridge {
         @JavascriptInterface public void fetchText(String rawUrl, String requestId) {
-            Executors.newSingleThreadExecutor().execute(() -> {
+            networking.execute(() -> {
                 String content = "", error = "";
                 HttpURLConnection connection = null;
                 try {
@@ -138,6 +140,7 @@ public class MainActivity extends Activity {
     }
     @Override public void onDestroy() {
         browser.removeJavascriptInterface("AuroraNative");
+        networking.shutdownNow();
         browser.destroy();
         super.onDestroy();
     }
