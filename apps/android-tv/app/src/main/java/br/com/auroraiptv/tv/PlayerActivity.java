@@ -94,5 +94,7 @@ public class PlayerActivity extends Activity {
             player = null;
         }
         super.onStop();
+        // Returning from TV Home must not show a player without its released decoder.
+        if (!isFinishing()) finish();
     }
 }
