@@ -1,6 +1,14 @@
 package br.com.auroraiptv.tv;
 
 import android.app.Activity;
+import android.content.pm.ApplicationInfo;
+import android.os.Handler;
+import android.os.Looper;
+import java.net.HttpURLConnection;
+import java.net.URL;
+import java.io.ByteArrayOutputStream;
+import java.io.InputStream;
+import java.util.concurrent.Executors;
 import android.content.Intent;
 import android.content.res.Configuration;
 import android.net.Uri;
@@ -27,7 +35,7 @@ public class MainActivity extends Activity {
         getWindow().getDecorView().setSystemUiVisibility(
             View.SYSTEM_UI_FLAG_FULLSCREEN | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION |
             View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY | View.SYSTEM_UI_FLAG_LAYOUT_STABLE);
-        WebView.setWebContentsDebuggingEnabled(BuildConfig.DEBUG);
+        WebView.setWebContentsDebuggingEnabled((getApplicationInfo().flags & ApplicationInfo.FLAG_DEBUGGABLE) != 0);
         browser = new WebView(this);
         browser.setBackgroundColor(0xff07111f);
         setContentView(browser);
@@ -57,6 +65,41 @@ public class MainActivity extends Activity {
     }
 
     public final class PlaybackBridge {
+        @JavascriptInterface public void fetchText(String rawUrl, String requestId) {
+            Executors.newSingleThreadExecutor().execute(() -> {
+                String content = "", error = "";
+                HttpURLConnection connection = null;
+                try {
+                    URL url = new URL(rawUrl);
+                    String scheme = url.getProtocol();
+                    if (!"https".equalsIgnoreCase(scheme) && !"http".equalsIgnoreCase(scheme))
+                        throw new IllegalArgumentException("unsupported protocol");
+                    connection = (HttpURLConnection) url.openConnection();
+                    connection.setConnectTimeout(12000);
+                    connection.setReadTimeout(20000);
+                    connection.setInstanceFollowRedirects(true);
+                    if (connection.getResponseCode() / 100 != 2)
+                        throw new IllegalStateException("server error");
+                    try (InputStream input = connection.getInputStream();
+                         ByteArrayOutputStream buffer = new ByteArrayOutputStream()) {
+                        byte[] bytes = new byte[16384];
+                        int size;
+                        while ((size = input.read(bytes)) != -1) {
+                            if (buffer.size() + size > 16_000_000)
+                                throw new IllegalStateException("file is too large for this version");
+                            buffer.write(bytes, 0, size);
+                        }
+                        content = buffer.toString("UTF-8");
+                    }
+                } catch (Exception e) {
+                    error = "Falha na rede ou arquivo acima do limite.";
+                } finally { if (connection != null) connection.disconnect(); }
+                final String js = "window.auroraNativeTextResponse(" +
+                    JSONObject.quote(requestId) + "," + JSONObject.quote(content) + "," +
+                    JSONObject.quote(error) + ")";
+                runOnUiThread(() -> browser.evaluateJavascript(js, null));
+            });
+        }
         @JavascriptInterface public void play(String url, String title, String key, double resumeSeconds) {
             Uri uri;
             try { uri = Uri.parse(url); }
