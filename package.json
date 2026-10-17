@@ -6,10 +6,14 @@
   "description": "AURORA IPTV TV — TV-first developer preview",
   "scripts": {
     "test": "node --test tests/*.test.mjs",
-    "check": "node --check src/main.mjs && node --check src/core/playlist.mjs && node --check src/core/focus.mjs && node --check src/core/storage.mjs && node --check src/core/epg.mjs && node --check src/core/native.mjs",
-    "package:tv": "node scripts/package-dev.mjs"
+    "check": "node --check src/main.mjs && node --check src/core/playlist.mjs && node --check src/core/focus.mjs && node --check src/core/storage.mjs && node --check src/core/epg.mjs && node --check src/core/native.mjs && node --check src/core/parental.mjs && node --check src/core/updates.mjs",
+    "package:tv": "node scripts/package-dev.mjs",
+    "test:ui": "playwright test"
   },
   "engines": {
     "node": ">=20"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.56.1"
   }
 }
