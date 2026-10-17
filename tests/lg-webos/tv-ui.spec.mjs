@@ -58,13 +58,45 @@ test("LG remote still navigates with arrow keys and enter", async ({page}) => {
   expect(focused).not.toBe("nav-live");
 });
 
-test("LG clarifies the 180-card preview limit without hiding search results", async ({page}) => {
+test("LG can navigate beyond 180 and eventually reach all 201 imported channels", async ({page}) => {
   await addChannels(page,201);
-  await expect(page.locator(".cards > .card")).toHaveCount(180);
-  await expect(page.locator(".lg-results-summary")).toContainText("Exibindo 180 de 201 itens");
+  await expect(page.locator(".cards > .card")).toHaveCount(48);
+  await expect(page.locator("[data-lg-count]")).toContainText("48");
+  await expect(page.locator("[data-lg-count]")).toContainText("201");
+  for(let i=0;i<4;i++) await page.locator('[data-action="lg-more"]').click();
+  await expect(page.locator(".cards > .card")).toHaveCount(201);
+  await expect(page.locator('[data-action="lg-more"]')).toHaveCount(0);
+  await expect(page.getByText("Canal 201",{exact:true})).toBeVisible();
   await page.locator('input[data-input="search"]').fill("Canal 201");
   await expect(page.locator(".cards > .card")).toHaveCount(1);
   await expect(page.locator(".lg-results-summary")).toHaveCount(0);
+});
+
+test("LG sidebar and logo remain in place when the channel catalogue scrolls", async ({page}) => {
+  await addChannels(page,120);
+  const before=await page.locator(".sidebar .logo").evaluate(el=>el.getBoundingClientRect().top);
+  const scrolled=await page.locator("main").evaluate(main=>{main.scrollTop=1100;return main.scrollTop;});
+  expect(scrolled).toBeGreaterThan(100);
+  const after=await page.locator(".sidebar .logo").evaluate(el=>el.getBoundingClientRect().top);
+  expect(Math.abs(after-before)).toBeLessThan(1);
+  const pageScroll=await page.evaluate(()=>document.documentElement.scrollTop);
+  expect(pageScroll).toBe(0);
+});
+
+test("LG repairs linear TV channels mislabeled as a Series category",async({page})=>{
+  const data='#EXTM3U\n#EXTINF:-1 group-title="Série",A&E FHD [ALT]\nhttps://example.test/a.m3u8\n'+
+    '#EXTINF:-1 group-title="Série",AMC HD\nhttps://example.test/b.m3u8\n'+
+    '#EXTINF:-1 group-title="Série",Drama S01E02 FHD\nhttps://example.test/c.m3u8';
+  await page.locator('[data-focus="nav-settings"]').click();
+  await page.locator('input[name="name"]').fill("Teste de classificação");
+  await page.locator('textarea[name="m3u"]').fill(data);
+  await page.locator('#playlist-form').getByRole('button',{name:"Salvar playlist"}).click();
+  await page.locator('[data-focus="nav-live"]').click();
+  await expect(page.getByRole("button",{name:"Abrir A&E FHD [ALT]"})).toBeVisible();
+  await expect(page.getByRole("button",{name:"Abrir AMC HD"})).toBeVisible();
+  await page.locator('[data-focus="nav-series"]').click();
+  await expect(page.getByRole("button",{name:/Abrir Drama/})).toBeVisible();
+  await expect(page.getByRole("button",{name:/Abrir A&E/})).toHaveCount(0);
 });
 
 test("LG classifies a playback failure as warning, not as success", async ({page}) => {
