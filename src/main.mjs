@@ -1,5 +1,6 @@
 import { parseM3U, groupSeries } from "./core/playlist.mjs";
 import { loadState, saveState, itemKey } from "./core/storage.mjs";
+import { parseXMLTV, currentAndNext, footballFromEpg } from "./core/epg.mjs";
 import { focusFirst, restoreFocus, nextFocus } from "./core/focus.mjs";
 
 const app = document.getElementById("app");
@@ -56,6 +57,21 @@ function addCard(item, label = "") {
     '</div><div class="card-tag">' + esc(item.group || (item.type === "series" ? "Série" : "Conteúdo")) + '</div></div></button>';
 }
 function cards(itemsToShow, label = "") { return '<div class="cards">' + itemsToShow.slice(0, 180).map(it => addCard(it, label)).join("") + '</div>'; }
+const timeLabel = ms => new Intl.DateTimeFormat("pt-BR",{day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"}).format(new Date(ms));
+function epgGuide() { return activePlaylist()?.guide || {channels:[],programs:[]}; }
+function guideRows(channels) {
+  const guide=epgGuide();
+  if(!guide.programs.length)return "";
+  const rows=channels.slice(0,60).map(item=>{
+    const n=currentAndNext(item,guide);
+    if(!n.current&&!n.next)return "";
+    const index=displayItems.push(item)-1;
+    const text=n.current ? "Agora: "+n.current.title+" ("+timeLabel(n.current.start)+")" : "Sem programa atual";
+    return '<button class="playlist-line guide-row" data-focus="guide-'+index+'" data-action="item" data-index="'+index+
+      '"><strong>'+esc(item.title)+'</strong><span>'+esc(text)+(n.next?' · A seguir: '+esc(n.next.title):'')+'</span></button>';
+  }).filter(Boolean).join("");
+  return rows ? '<section><h2>Programação de canais</h2><div class="saved-list">'+rows+'</div></section>' : "";
+}
 function home() {
   const s = stats(), playlist = activePlaylist();
   const recent = state.recent.filter(it => !it.playlistId || it.playlistId === state.activeId).slice(0, 5);
@@ -80,7 +96,7 @@ function catalogue(type, title) {
   if (search.trim()) content = content.filter(it => it.title.toLocaleLowerCase("pt-BR").includes(search.trim().toLocaleLowerCase("pt-BR")));
   return pageShell(title) + '<h2>' + esc(title) + '</h2><p class="subtitle">' + content.length + ' itens encontrados nesta seção</p>' +
    '<div class="searchbar"><input class="search" type="search" data-focus="search" data-input="search" placeholder="Buscar por nome..." value="' + esc(search) + '" aria-label="Buscar"></div>' +
-   (content.length ? cards(content) : empty("Nenhum conteúdo nesta seção", "Adicione uma playlist ou tente uma pesquisa diferente.", !activePlaylist()));
+   (content.length ? cards(content) : empty("Nenhum conteúdo nesta seção", "Adicione uma playlist ou tente uma pesquisa diferente.", !activePlaylist())) + (type==="live" ? guideRows(content) : "");
 }
 function seriesDetails() {
   if (!currentSeries) return empty("Série não encontrada", "Volte ao catálogo.");
@@ -92,9 +108,17 @@ function seriesDetails() {
    '<section><h2>Episódios disponíveis</h2>' + cards(currentSeries.episodes) + '</section>';
 }
 function football() {
-  return pageShell("Futebol") + '<h1>Futebol</h1><p class="subtitle">Agenda, competições e transmissões identificadas pelo EPG.</p>' +
-   empty("Sem partidas verificadas", "Não exibimos horários, placares ou confrontos fictícios. A integração com EPG e provedores esportivos será implementada numa etapa posterior.") +
-   '<section><h2>Campeonatos planejados</h2><p>Jogos · FIFA e Seleções · Brasileirão · Libertadores · Sul-Americana · Ligas estrangeiras</p></section>';
+  const matches=footballFromEpg(items(), epgGuide());
+  const rows=matches.slice(0,100).map(match=>{
+    const index=displayItems.push(match.channel)-1;
+    const now=Date.now(),p=match.program;
+    const status=match.isReprise?"REPRISE":p.start<=now&&p.stop>now?"TRANSMISSÃO AGORA":"EM BREVE";
+    return '<button class="football-row" data-action="item" data-index="'+index+'" data-focus="match-'+index+'"><div class="football-teams">'+esc(match.home)+' <strong>×</strong> '+esc(match.away)+'</div>'+
+      '<div class="football-time">'+esc(status)+' · '+esc(timeLabel(p.start))+' · '+esc(match.channel.title)+'</div></button>';
+  }).join("");
+  return pageShell("Futebol") + '<h1>Futebol</h1><p class="subtitle">Transmissões identificadas no EPG da sua playlist. O horário é da transmissão, não necessariamente o início da partida.</p>' +
+   (rows?'<div class="football-list">'+rows+'</div>':empty("Sem confrontos confirmados pelo guia", "Importe um XMLTV em Configurações. Sem dados confiáveis, não inventamos jogos ou placares.")) +
+   '<section><h2>Competições</h2><p>Os filtros por campeonato serão liberados quando existirem metadados confiáveis. Não usamos resultados fictícios.</p></section>';
 }
 function settings() {
   const selected = activePlaylist();
@@ -110,6 +134,11 @@ function settings() {
    '<div class="actions"><button class="btn primary" type="submit" data-focus="save-list">Salvar playlist</button></div></form>' +
    '<p class="muted">No navegador, a importação por URL depende de CORS. Para listas muito grandes ainda será necessário armazenamento nativo e importação em fluxo.</p>' +
    '<div class="saved-list">' + (lines || '<p class="muted">Nenhuma playlist cadastrada.</p>') + '</div></div>' +
+   '<div class="panel"><h3>Guia de programação (XMLTV)</h3><p>Para sua playlist ativa. O guia é usado em Ao Vivo e Futebol.</p>' +
+   '<form id="epg-form"><label class="field">URL XMLTV (opcional)<input name="url" type="url" placeholder="https://.../epg.xml" data-focus="epg-url" value="'+esc(selected?.guideUrl||"")+'"></label>' +
+   '<label class="field">Texto XMLTV para testes (opcional)<textarea name="xml" data-focus="epg-text" placeholder="&lt;tv&gt;...&lt;/tv&gt;"></textarea></label>' +
+   '<button type="submit" class="btn primary" data-focus="epg-save">Importar programação</button></form>' +
+   '<p class="muted">'+(selected?.guide?.programs?.length||0)+' programas salvos nesta playlist. Arquivos XMLTV.gz ainda exigem descompactação no servidor ou suporte específico.</p></div>' +
    '<div class="panel"><h3>Aparência e testes</h3>' +
    '<label class="field">Tema<select id="theme" data-focus="theme"><option value="dark"' + (state.theme==="dark"?" selected":"") + '>Escuro</option><option value="light"' + (state.theme==="light"?" selected":"") + '>Claro (experimental)</option></select></label>' +
    '<div class="actions"><button class="btn" data-action="test" data-focus="test-video">' + icon("play") + ' Vídeo CC0</button>' +
@@ -117,7 +146,7 @@ function settings() {
    '<p class="muted">Ativa: ' + esc(selected?.name || "Nenhuma") + '</p><p class="muted">Itens sem tipo confiável: ' + s.unknown + '</p>' +
    (s.unknown ? '<button class="btn" data-focus="unknown" data-action="unknown">Visualizar não classificados</button>' : "") +
    '<p class="muted">A prévia salva dados no armazenamento do navegador: não use credenciais privadas para testes públicos ou compartilhados.</p>' +
-   '<p class="muted">EPG, PIN parental, 20 idiomas, atualizações diárias e players nativos: planejados, ainda não concluídos.</p></div></div>';
+   '<p class="muted">PIN parental, 20 idiomas e players nativos: planejados, ainda não concluídos.</p></div></div>';
 }
 function render(preferredFocus = "") {
   displayItems = [];
@@ -188,6 +217,21 @@ function closePlayer() {
   render(returnFocusKey);
   returnFocusKey = "";
 }
+async function saveGuide(form) {
+  const p=activePlaylist();
+  if(!p){ notice="Escolha uma playlist antes de importar o EPG.";render("nav-settings");return; }
+  const data=new FormData(form);
+  const url=String(data.get("url")||"").trim(), pasted=String(data.get("xml")||"").trim();
+  if(!pasted&&!safeMedia(url)){notice="Insira XMLTV válido ou uma URL HTTP(S).";render("epg-url");return;}
+  try{
+    let xml=pasted;
+    if(!xml){ const r=await fetch(url);if(!r.ok)throw Error("HTTP "+r.status);xml=await r.text(); }
+    const guide=parseXMLTV(xml);
+    if(!guide.programs.length)throw Error("O XMLTV não contém programas válidos.");
+    p.guide=guide;if(url)p.guideUrl=url;
+    persist();notice="Guia importado: "+guide.programs.length+" programas.";render("nav-settings");
+  }catch(err){notice="Não foi possível importar XMLTV: "+err.message+". Verifique também CORS.";render("nav-settings");}
+}
 async function savePlaylist(form) {
   const data = new FormData(form);
   const name = String(data.get("name")||"").trim();
@@ -204,7 +248,7 @@ async function savePlaylist(form) {
     const parsed=parseM3U(text);
     if (!parsed.count) throw new Error("Nenhuma entrada de vídeo válida foi encontrada.");
     const id=(globalThis.crypto?.randomUUID?.() || String(Date.now()));
-    state.playlists.push({id,name,url,items:parsed.items,guideUrl:parsed.guideUrl,updatedAt:Date.now()});
+    state.playlists.push({id,name,url,items:parsed.items,guideUrl:parsed.guideUrl,guide:null,updatedAt:Date.now()});
     state.activeId=id; notice="Playlist importada: " + parsed.count + " entradas válidas.";
     persist(); render("nav-settings");
   } catch(error) { notice="Não foi possível importar: " + (error instanceof Error ? error.message : "erro desconhecido") + ". Confira o formato e, para URL, as permissões CORS."; render("name"); }
@@ -243,6 +287,7 @@ app.addEventListener("click",event=>{
 });
 app.addEventListener("submit",event=>{
   if(event.target.id==="playlist-form"){ event.preventDefault();savePlaylist(event.target); }
+  if(event.target.id==="epg-form"){ event.preventDefault();saveGuide(event.target); }
 });
 app.addEventListener("input",event=>{
   if(event.target.dataset.input!=="search") return;
