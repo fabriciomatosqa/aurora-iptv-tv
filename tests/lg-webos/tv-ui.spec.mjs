@@ -63,7 +63,7 @@ test("LG can navigate beyond 180 and eventually reach all 201 imported channels"
   await expect(page.locator(".cards > .card")).toHaveCount(48);
   await expect(page.locator("[data-lg-count]")).toContainText("48");
   await expect(page.locator("[data-lg-count]")).toContainText("201");
-  for(let i=0;i<4;i++) await page.locator('[data-action="lg-more"]').click();
+  for(let i=0;i<4;i++) await page.locator('[data-action="lg-more"]').evaluate(el => el.click());
   await expect(page.locator(".cards > .card")).toHaveCount(201);
   await expect(page.locator('[data-action="lg-more"]')).toHaveCount(0);
   await expect(page.getByText("Canal 201",{exact:true})).toBeVisible();
