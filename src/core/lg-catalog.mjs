@@ -106,3 +106,37 @@ export function auditLgCatalog(items){
   }
   return result;
 }
+
+
+// Keep day-old entries offline but update metadata for streams still present.
+// The original shared merger only appended URLs and left corrected M3U labels stale.
+export function mergeLgPlaylist(oldItems,newItems){
+  const list=[],positions=new Map();
+  for(const item of oldItems||[]){
+    if(!item?.url || positions.has(item.url))continue;
+    positions.set(item.url,list.length);
+    list.push({...item});
+  }
+  let added=0,updated=0;
+  for(const item of newItems||[]){
+    if(!item?.url)continue;
+    if(positions.has(item.url)){
+      const pos=positions.get(item.url);
+      const old=list[pos];
+      const merged={...old,...item,
+        logo:item.logo||old.logo,
+        tvgId:item.tvgId||old.tvgId,
+        platform:item.platform||old.platform,
+        genre:item.genre||old.genre
+      };
+      merged.type=typeFor(merged);
+      list[pos]=merged;
+      updated++;
+    }else{
+      const entry={...item,type:typeFor(item)};
+      positions.set(item.url,list.length);
+      list.push(entry);added++;
+    }
+  }
+  return {items:list,added,updated};
+}
