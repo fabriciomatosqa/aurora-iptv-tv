@@ -14,7 +14,7 @@ function typeFor(item) {
   if(MOVIE_GROUP.test(group))return "movies";
   // Some IPTV providers incorrectly label linear TV channel collections "Série".
   // Only override this when channel-style quality markers are present.
-  if(SERIES_GROUP.test(group) && BROADCAST_QUALITY.test(title))return "live";
+  if(SERIES_GROUP.test(group) && (BROADCAST_QUALITY.test(title) || String(item?.tvgId||"").trim()))return "live";
   if(SERIES_GROUP.test(group))return "series";
   return item.type || "unknown";
 }
