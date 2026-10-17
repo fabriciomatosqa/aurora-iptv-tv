@@ -8,7 +8,7 @@ import {remoteKey,registerRemoteKeys} from "./core/remote.mjs";
 import {hasTizenPlayer,startTizenPlayer,tizenPositionSeconds,toggleTizenPlayback,seekTizen,stopTizenPlayer} from "./core/tizen-player.mjs";
 import {loadCatalog,saveCatalog,loadGuide,saveGuide as saveGuideDB,deletePlaylistData} from "./core/catalog-db.mjs";
 import { focusFirst, restoreFocus, nextFocus } from "./core/focus.mjs";
-import {parseLgM3U,reclassifyLgItems,auditLgCatalog} from "./core/lg-catalog.mjs";
+import {parseLgM3U,reclassifyLgItems,auditLgCatalog,mergeLgPlaylist} from "./core/lg-catalog.mjs";
 import {LG_LIBRARY_ROUTES, lgHomeMarkup, lgSecondaryMarkup, lgGroupKey, lgFacets} from "./core/lg-layout.mjs";
 import {lgBrowseModel,lgSeriesGroups,lgMatchSchedule} from "./core/lg-browser.mjs";
 import {lgRail,lgBrowserHeader,lgEpgMarkup,lgMovieMarkup,lgEpisodesMarkup,lgFootballHomeMarkup} from "./core/lg-browser-view.mjs";
@@ -30,6 +30,9 @@ const lgBrowseState={
   series:{platform:"",series:""}
 };
 let lgBrowserModel=null,lgRailRows={first:[],second:[]};
+const lgRailQuery={first:"",second:""};
+const lgRailLimit={first:100,second:120};
+let lgResetSecondScroll=false,lgResetThirdScroll=false;
 let lgPageItems=[], lgRendered=0, lgObserver=null;
 function resetLgPage() {
   lgPageItems=[];lgRendered=0;
@@ -70,10 +73,12 @@ function items() { return activePlaylist()?.items || []; }
 function stats() {
   const all = items();
   return { live: all.filter(i=>i.type==="live").length, movies: all.filter(i=>i.type==="movies").length,
-    series: groupSeries(all).length, unknown: all.filter(i=>i.type==="unknown").length };
+    series: lgTv?lgSeriesGroups(all).length:groupSeries(all).length, unknown: all.filter(i=>i.type==="unknown").length };
 }
 function persist() { if (!saveState(state)) notice = "O armazenamento local está cheio. Nesta versão de teste use listas menores."; }
-function navigate(next) { if (next === route) return; history.push(route); if(lgTv && next!=="details")lgSelectedGroup="__all__"; route = next; search = ""; resetLgPage();render();lgScrollMainTop(); }
+function navigate(next) { if (next === route) return; history.push(route);
+  if(lgTv && next!=="details"){lgSelectedGroup="__all__";lgRailQuery.first="";lgRailQuery.second="";lgRailLimit.first=100;lgRailLimit.second=120;}
+  route = next; search = ""; resetLgPage();render();lgScrollMainTop(); }
 function goBack() { if (currentPlay) { closePlayer(); return; } if (history.length) { route = history.pop(); search = ""; resetLgPage();render();lgScrollMainTop(); } else if (route !== "home") { route = "home"; resetLgPage();render();lgScrollMainTop(); } }
 function pageShell(label) {
   return '<div class="topbar"><div class="eyebrow">' + esc(label) + '</div><div class="topright">AURORA IPTV TV · PRÉVIA 0.2.0</div></div>';
@@ -160,7 +165,10 @@ function home() {
     const football=lgFootballHomeMarkup(matches,register);
     const home=lgHomeMarkup({stats:s,favorites:state.favorites.length,recent:recentCount,
       playlistName:playlist?.name||"",hasPlaylist:Boolean(playlist),esc});
-    return home.replace('<footer class="lg-home-footer">',football+'<footer class="lg-home-footer">');
+    const auditLink=s.unknown?
+      '<button type="button" class="lg-unclassified-link" data-action="unknown" data-focus="home-unknown">'+
+      s.unknown.toLocaleString("pt-BR")+' itens ainda sem classificação · Verificar ›</button>':"";
+    return home.replace('<footer class="lg-home-footer">',football+auditLink+'<footer class="lg-home-footer">');
   }
   const recent = state.recent.filter(it => (!it.playlistId || it.playlistId === state.activeId) && allowed(it)).slice(0, 5);
   const total = s.live + s.movies + s.series;
@@ -179,7 +187,12 @@ function home() {
 }
 function catalogue(type, title) {
   let content = type === "series" ? groupSeries(items()) : items().filter(i=>i.type===type);
-  if (type === "favorites") content = [...items().filter(i=>state.favorites.includes(itemKey(i,state.activeId)) && i.type!=="series"), ...groupSeries(items()).filter(i=>state.favorites.includes(itemKey(i,state.activeId)))];
+  if (type === "favorites") {
+    const shows=lgTv?lgSeriesGroups(items()):groupSeries(items());
+    content=[...items().filter(i=>state.favorites.includes(itemKey(i,state.activeId)) && i.type!=="series"),
+      ...shows.filter(i=>state.favorites.includes(itemKey(i,state.activeId))||
+        (lgTv&&state.favorites.includes(lgSeriesKey(i))))];
+  }
   if (type === "unknown") content = items().filter(i=>i.type==="unknown");
   if (lgTv && type==="history") content=state.recent.filter(it=>(!it.playlistId || it.playlistId===state.activeId));
   content=content.filter(allowed);
@@ -259,6 +272,7 @@ function settings() {
    '<p class="muted">A prévia salva dados no armazenamento do navegador: não use credenciais privadas para testes públicos ou compartilhados.</p>' +
    '<p class="muted">20 idiomas e suporte completo a todas as APIs de TV continuam em desenvolvimento.</p></div></div>';
 }
+function lgSeriesKey(series){return String(state.activeId||"demo")+"|series:"+String(series.platform||"")+"|"+String(series.title||"");}
 function lgTripleBrowser(preferredFocus="") {
   // LG-only UI; catalogs are filtered before modelling, preserving parental policy.
   const data=items().filter(allowed);
@@ -276,6 +290,8 @@ function lgTripleBrowser(preferredFocus="") {
     stateForRoute.series=model.series;
   }
   const register=item=>displayItems.push(item)-1;
+  const prevLists=[...app.querySelectorAll(".lg-v4-rail-list")].map(el=>el.scrollTop);
+  const prevThird=app.querySelector(".lg-v4-third")?.scrollTop||0;
   let first=[],second=[],firstTitle="",secondTitle="",third="",firstLabel="",secondLabel="";
   if(route==="live"){
     firstTitle="Plataformas";secondTitle="Canais";
@@ -291,21 +307,27 @@ function lgTripleBrowser(preferredFocus="") {
   } else if(route==="series"){
     firstTitle="Plataformas";secondTitle="Séries";
     first=model.platforms;
-    second=model.shows.map(entry=>({key:entry.key,label:entry.title,count:entry.episodes.length}));
+    second=model.shows.map(entry=>({key:entry.key,label:entry.title,count:entry.episodes.length,logo:entry.logo}));
     firstLabel="Escolha a plataforma";secondLabel=model.platform||"Escolha uma plataforma";
-    const fav=model.selected && state.favorites.includes(itemKey(model.selected,state.activeId));
+    const fav=model.selected && (state.favorites.includes(itemKey(model.selected,state.activeId)) || state.favorites.includes(lgSeriesKey(model.selected)));
     third=lgEpisodesMarkup(model,register,itemKey(model.selected||{},state.activeId),Boolean(fav));
   }
   lgRailRows={first,second};
   app.innerHTML=lgBrowserHeader(route)+
     '<div class="lg-v4-workspace" role="main">'+
     lgRail({title:firstTitle,subtitle:firstLabel,items:first,selectedKey:
-      route==="movies"?model.genre:model.platform,action:"lg-filter",kind:"first",focusPrefix:"lg-first"})+
+      route==="movies"?model.genre:model.platform,action:"lg-filter",kind:"first",focusPrefix:"lg-first",query:lgRailQuery.first,limit:lgRailLimit.first})+
     lgRail({title:secondTitle,subtitle:secondLabel,items:second,selectedKey:
       route==="live"?model.channel:route==="series"?model.series:model.platform,
-      action:"lg-filter",kind:"second",focusPrefix:"lg-second"})+
+      action:"lg-filter",kind:"second",focusPrefix:"lg-second",query:lgRailQuery.second,limit:lgRailLimit.second})+
     '<main class="lg-v4-third" aria-label="'+esc(route==="live"?"Guia de programação":route==="movies"?"Filmes filtrados":"Episódios")+'">'+
     third+'</main></div>';
+  const railLists=[...app.querySelectorAll(".lg-v4-rail-list")];
+  if(railLists[0])railLists[0].scrollTop=prevLists[0]||0;
+  if(railLists[1])railLists[1].scrollTop=lgResetSecondScroll?0:(prevLists[1]||0);
+  const thirdPane=app.querySelector(".lg-v4-third");
+  if(thirdPane)thirdPane.scrollTop=lgResetThirdScroll?0:prevThird;
+  lgResetSecondScroll=false;lgResetThirdScroll=false;
   restoreFocus(preferredFocus||"lg-first-0");
   observeLgPages();
 }
@@ -319,6 +341,7 @@ function render(preferredFocus = "") {
   app.className=lgTv?(homepage?"lg-home-mode":triple?"lg-triple-mode":library?"lg-library-mode":"lg-standard-mode"):"";
   if(triple){lgTripleBrowser(preferredFocus);return;}
   if(homepage){
+    if(lgTv && /não conseguiu reproduzir esta mídia/i.test(notice))notice="";
     app.innerHTML=(notice?'<div class="notice lg-home-notice" role="status">'+esc(notice)+'</div>':"")+home();
     restoreFocus(preferredFocus || "home-live");
     return;
@@ -469,7 +492,7 @@ async function refreshActive({quiet=false, playlist=activePlaylist()}={}) {
   try{
     const parsed=lgTv?parseLgM3U(await loadRemoteText(playlist.url)):parseM3U(await loadRemoteText(playlist.url));
     if(!parsed.count)throw new Error("A lista recebida está vazia.");
-    const merge=mergePlaylist(playlist.items,parsed.items);
+    const merge=lgTv?mergeLgPlaylist(playlist.items,parsed.items):mergePlaylist(playlist.items,parsed.items);
     await saveCatalog(playlist.id,merge.items);
     playlist.items=merge.items;playlist.updatedAt=Date.now();
     if(lgTv)playlist.importAudit={declared:parsed.declared,invalid:parsed.invalid};
@@ -525,13 +548,21 @@ app.addEventListener("click",event=>{
       if(kind==="first"){selected.platform=entry.key;selected.series="";}
       else selected.series=entry.key;
     }
+    if(kind==="first"){lgRailQuery.second="";lgRailLimit.second=120;lgResetSecondScroll=true;}
+    lgResetThirdScroll=true;
     resetLgPage();render(target.dataset.focus); 
+  }
+  else if (lgTv && action==="lg-rail-more"){
+    const kind=target.dataset.kind;
+    if(kind==="first"||kind==="second"){lgRailLimit[kind]+=120;render("lg-more-"+kind);}
   }
   else if (lgTv && action==="lg-series-favorite"){
     if(lgBrowserModel?.selected){
       const series=lgBrowserModel.selected;
-      const key=itemKey(series,state.activeId);
-      state.favorites=state.favorites.includes(key)?state.favorites.filter(k=>k!==key):[...state.favorites,key];
+      const key=lgSeriesKey(series),legacy=itemKey(series,state.activeId);
+      const was=state.favorites.includes(key)||state.favorites.includes(legacy);
+      state.favorites=state.favorites.filter(k=>k!==key&&k!==legacy);
+      if(!was)state.favorites.push(key);
       persist();render("lg-series-favorite");
     }
   }
@@ -564,6 +595,18 @@ app.addEventListener("submit",event=>{
   if(event.target.id.startsWith("pin-")){event.preventDefault();handlePin(event.target);}
 });
 app.addEventListener("input",event=>{
+  if(lgTv&&event.target.dataset.input==="lg-rail-search"){
+    const kind=event.target.dataset.kind;
+    if(kind==="first"||kind==="second"){
+      const value=event.target.value,cursor=event.target.selectionStart;
+      lgRailQuery[kind]=value;
+      lgRailLimit[kind]=kind==="first"?100:120;
+      render("lg-search-"+kind);
+      const newInput=app.querySelector('[data-input="lg-rail-search"][data-kind="'+kind+'"]');
+      if(newInput&&cursor!==null)newInput.setSelectionRange(cursor,cursor);
+    }
+    return;
+  }
   if(event.target.dataset.input!=="search") return;
   const cursor=event.target.selectionStart;search=event.target.value;resetLgPage();render("search");
   const input=app.querySelector('[data-input="search"]');if(input&&cursor!==null)input.setSelectionRange(cursor,cursor);
