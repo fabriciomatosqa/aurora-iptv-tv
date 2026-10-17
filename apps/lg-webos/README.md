@@ -105,3 +105,22 @@ Esta atualização altera **exclusivamente a experiência LG webOS**. A Home man
 Acesse a execução verde mais recente da branch `feature/lg-webos-triple-navigation` no workflow **Build LG webOS developer IPK**. Em *Artifacts*, baixe **aurora-iptv-tv-lg-simulator-folder**, extraia e selecione a pasta com `appinfo.json` no webOS TV 26 Simulator. O IPK de desenvolvimento é separado.
 
 **Limitações:** Plataformas/gêneros dependem da organização do provedor na M3U; conteúdo sem metadados não pode ser classificado por empresa sem dados externos; streaming e codecs dependem da compatibilidade do simulador e da TV real. Jogos aparecem quando o XMLTV possui confrontos identificáveis e canal correspondente.
+
+## LG 0.4.1 — correções de catálogo e navegação observadas no Simulator 26
+
+- **Separação correta**: canais como A&E, AMC e AXN que aparecem em grupos ambíguos `FILMES E SÉRIES` não são mais forçados em Filmes. Episódios com S01E01 continuam em Séries; arquivos de VOD com caminhos ou extensões confiáveis aparecem em Filmes. Entradas realmente ambíguas ficam em **Sem classificação**, com acesso pela Home.
+- **Plataforma pelo próprio M3U**: recupera etiquetas com símbolos, como `♦ Netflix` ou `✦ Crunchyroll`, e atributos opcionais `provider`, `platform`, `genre`, sem assumir uma plataforma a partir do nome do vídeo.
+- **Contagem e atualização**: mantém URLs antigas, remove duplicados por URL nas atualizações, substitui metadados de itens existentes para que correções persistam. Catálogos já armazenados são reclassificados na abertura, preservando favoritos e posições.
+- **Busca no controle remoto**: primeira e segunda colunas têm pesquisa quando há muitos resultados; a segunda renderiza até 120 itens inicialmente e permite carregar os demais, procurando em todo o catálogo filtrado.
+- **Foco e rolagem**: preserva a posição das colunas ao navegar. Cartazes pequenos junto às séries quando houver imagem válida.
+- **EPG**: substitui três avisos repetidos de ausência de guia por um estado vazio claro com atalho para Configurações.
+- **Home e Futebol**: retira o segundo botão duplicado do Futebol; quando não há partidas identificadas no EPG, exibe instruções e acesso para importar o guia, sem placares fictícios.
+- **Reprodução**: uma falha de codec/rede aparece dentro do próprio player LG e não fica permanentemente sobre a página inicial após sair.
+
+### Importante
+
+Sem acesso ao M3U/XMLTV completo do usuário não é possível assegurar a classificação de todas as entradas. O aplicativo agora distingue dados realmente reconhecíveis daqueles que necessitam de revisão; isso é intencional. O Simulator webOS nem sempre reproduz os mesmos formatos que uma TV LG física.
+
+### Como testar
+
+Na branch `feature/lg-webos-catalog-fixes-v041`, execute ou aguarde **Build LG webOS developer IPK**. Baixe `aurora-iptv-tv-lg-simulator-folder` nos Artifacts da execução verde, extraia e escolha a pasta com `appinfo.json` no Simulator 26. Teste A&E e AMC em Ao Vivo, Filmes sem esses canais, plataformas Netflix em Séries, busca de séries distantes e retorno do player para Home.

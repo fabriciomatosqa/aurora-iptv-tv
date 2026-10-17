@@ -2,18 +2,35 @@
 const safe=(v)=>String(v??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 const n=v=>Number(v||0).toLocaleString("pt-BR");
 const clock=ms=>new Intl.DateTimeFormat("pt-BR",{weekday:"short",day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"}).format(new Date(ms));
-export function lgRail({title,subtitle,items,selectedKey,action,kind,focusPrefix}){
-  const body=items.length?items.map((item,index)=>
+export function lgRail({title,subtitle,items,selectedKey,action,kind,focusPrefix,query="",limit=120}){
+  const needle=String(query||"").normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLocaleLowerCase("pt-BR");
+  const hits=items.map((item,index)=>({item,index})).filter(({item})=>
+    !needle||String(item.label||item.title||"").normalize("NFD")
+      .replace(/[\u0300-\u036f]/g,"").toLocaleLowerCase("pt-BR").includes(needle));
+  const shown=hits.slice(0,limit);
+  const body=shown.length?shown.map(({item,index})=>
     '<button type="button" class="lg-v4-row'+(item.key===selectedKey?' selected':'')+
     '" data-action="'+action+'" data-kind="'+kind+'" data-row="'+index+'" data-focus="'+focusPrefix+'-'+index+
     '" aria-pressed="'+(item.key===selectedKey?'true':'false')+'">'+
+    (item.logo?'<span class="lg-v4-row-art"><img loading="lazy" src="'+safeMedia(item.logo)+'" alt="" onerror="this.parentElement.style.display=\'none\'"></span>':'')+
     '<span class="lg-v4-row-name">'+safe(item.label||item.title)+'</span>'+
     (item.count!==undefined?'<span class="lg-v4-count">'+n(item.count)+'</span>':'')+
     '<span class="lg-v4-row-chevron" aria-hidden="true">›</span></button>').join("") :
-    '<div class="lg-v4-empty-rail">Nenhum item disponível</div>';
+    '<div class="lg-v4-empty-rail">'+(needle?"Nenhum resultado para esta busca.":"Nenhum item disponível")+'</div>';
+  const more=shown.length<hits.length?
+    '<button type="button" class="lg-v4-load-more" data-action="lg-rail-more" data-kind="'+kind+
+    '" data-focus="lg-more-'+kind+'">Mostrar mais ('+n(hits.length-shown.length)+' restantes)</button>':"";
   return '<aside class="lg-v4-rail" aria-label="'+safe(title)+'">'+
-    '<div class="lg-v4-rail-head"><span>EXPLORAR</span><h2>'+safe(title)+'</h2><p>'+safe(subtitle)+'</p></div>'+
-    '<div class="lg-v4-rail-list">'+body+'</div></aside>';
+    '<div class="lg-v4-rail-head"><span>EXPLORAR</span><h2>'+safe(title)+'</h2><p>'+safe(subtitle)+'</p>'+
+    (items.length>8?'<input type="search" class="lg-v4-rail-search" data-input="lg-rail-search" data-kind="'+kind+
+      '" data-focus="lg-search-'+kind+'" value="'+safe(query)+'" placeholder="Buscar nesta coluna…" aria-label="Buscar '+safe(title)+'">':'')+
+    '</div><div class="lg-v4-rail-list">'+body+more+
+    (items.length>8?'<div class="lg-v4-rail-total">'+n(shown.length)+' de '+n(hits.length)+' resultados</div>':"")+
+    '</div></aside>';
+}
+function safeMedia(value){
+  try{const url=new URL(String(value));return ["http:","https:"].includes(url.protocol)?safe(url.href):"";}
+  catch{return "";}
 }
 export function lgBrowserHeader(route){
   const tabs=[["live","Ao Vivo"],["movies","Filmes"],["series","Séries"],["football","Futebol"]];
@@ -35,11 +52,12 @@ export function lgEpgMarkup(model,register){
     '<h2>'+safe(selected.title)+'</h2><p>'+safe(model.platform)+'</p></div>'+
     '<button class="lg-v4-play" data-action="item" data-index="'+index+'" data-focus="lg-play">▶ Assistir canal</button>'+
     '<h3 class="lg-v4-section-label">Guia de programação</h3>'+
-    (schedule.now?'<div class="lg-v4-epg-now"><span class="lg-v4-onair">NO AR</span>'+programme(schedule.now)+'</div>':
-      '<p class="lg-v4-epg-empty">Nenhum programa confirmado em andamento.</p>')+
-    (schedule.next.length?'<div class="lg-v4-epg-list">'+schedule.next.map(programme).join("")+'</div>':
-      '<p class="lg-v4-epg-empty">Sem próximas informações no EPG desta playlist.</p>')+
-    (!schedule.now&&!schedule.next.length?'<p class="lg-v4-hint">A programação depende de dados XMLTV válidos associados a este canal. Você pode importar o guia em Configurações.</p>':'');
+    (!schedule.now&&!schedule.next.length?
+      '<div class="lg-v4-no-epg"><span class="lg-v4-no-epg-icon">▦</span><h4>Programação indisponível</h4>'+
+      '<p>Este canal ainda não possui um guia de programação associado. Você pode assistir normalmente ou adicionar um XMLTV.</p>'+
+      '<button type="button" data-action="settings" data-focus="lg-epg-settings">Configurar EPG ›</button></div>':
+      (schedule.now?'<div class="lg-v4-epg-now"><span class="lg-v4-onair">NO AR</span>'+programme(schedule.now)+'</div>':'')+
+      (schedule.next.length?'<div class="lg-v4-epg-list">'+schedule.next.map(programme).join("")+'</div>':''));
 }
 export function lgMovieMarkup(model,cards){
   return '<div class="lg-v4-third-title"><span class="lg-v4-overline">FILMES</span><h2>'+safe(model.genre)+'</h2>'+
@@ -75,6 +93,6 @@ export function lgFootballHomeMarkup(matches,register) {
         '<strong>'+safe(match.home)+' <em>×</em> '+safe(match.away)+'</strong>'+
         '<small>'+safe(clock(p.start))+' · '+safe(match.channel.title)+'</small><span class="lg-v4-watch">Assistir ›</span></button>';
     }).join("")+'</div>':
-      '<div class="lg-v4-football-empty">Nenhum confronto identificado no EPG. Importe um guia XMLTV para mostrar jogos reais aqui.</div>')+
+      '<div class="lg-v4-football-empty"><strong>Jogos ainda não disponíveis</strong><span>Conecte um guia XMLTV com partidas e canais identificados para acompanhar as transmissões.</span><button data-action="settings" data-focus="home-football-settings">Configurar guia de programação ›</button></div>')+
     '</section>';
 }

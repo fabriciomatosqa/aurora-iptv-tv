@@ -78,7 +78,6 @@ export function lgHomeMarkup({stats,favorites=0,recent=0,playlistName="",esc,has
     '<div class="lg-home-tiles"><div class="lg-home-primary">'+tiles.slice(0,3).map(tile=>card(tile,true)).join("")+'</div>'+
     '<div class="lg-home-shortcuts">'+tiles.slice(3).map(tile=>card(tile,false)).join("")+'</div></div>'+
     '<footer class="lg-home-footer"><span>SEU UNIVERSO DE ENTRETENIMENTO</span>'+
-    '<div class="lg-home-quick"><button data-action="football" data-focus="home-football">'+lgSymbol("football")+' Futebol</button>'+
-    (hasPlaylist?'':'<button data-action="settings" data-focus="home-add">+ Adicionar playlist</button>')+
+    '<div class="lg-home-quick">'+(hasPlaylist?'':'<button data-action="settings" data-focus="home-add">+ Adicionar playlist</button>')+
     '</div><span>Use as setas do controle para navegar</span></footer></div>';
 }
