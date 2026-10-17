@@ -1,6 +1,7 @@
 import { parseM3U, groupSeries } from "./core/playlist.mjs";
 import { loadState, saveState, itemKey } from "./core/storage.mjs";
 import { parseXMLTV, currentAndNext, footballFromEpg } from "./core/epg.mjs";
+import { loadRemoteText, hasNativePlayer, startNative } from "./core/native.mjs";
 import { focusFirst, restoreFocus, nextFocus } from "./core/focus.mjs";
 
 const app = document.getElementById("app");
@@ -180,14 +181,18 @@ function startPlayer(item) {
   currentPlay = item;
   state.recent = [{ ...item, playlistId: state.activeId }, ...state.recent.filter(r => r.url !== item.url)].slice(0,15);
   persist();
-  const liked = state.favorites.includes(itemKey(item,state.activeId));
+  const key = itemKey(item,state.activeId);
+  if (hasNativePlayer()) {
+    startNative(item,key,state.positions[key]||0);
+    return;
+  }
+  const liked = state.favorites.includes(key);
   playerRoot.innerHTML = '<div class="player-screen" role="dialog" aria-label="Reprodutor de vídeo"><div class="player-header">' +
    '<div><h3>' + esc(item.title) + '</h3><p>Retomada disponível quando o formato permite</p></div>' +
    '<div class="actions"><button class="btn" data-action="player-favorite" data-focus="player-favorite">' + icon("star") + (liked?" Favoritado":" Favoritar") + '</button>' +
    '<button class="btn" data-action="close-player" data-focus="close-player">' + icon("back") + ' Voltar</button></div></div>' +
    '<video controls playsinline autoplay tabindex="0" data-focus="video" src="' + esc(url) + '"></video><div class="player-help">Esc ou Voltar para sair · Espaço para pausar</div></div>';
   const vid = playerRoot.querySelector("video");
-  const key = itemKey(item,state.activeId);
   vid.addEventListener("loadedmetadata",()=>{ const pos=state.positions[key]||0; if (Number.isFinite(vid.duration) && pos < vid.duration-15) vid.currentTime=pos; });
   vid.addEventListener("timeupdate",()=>{
     const sec=Math.floor(vid.currentTime);
@@ -225,7 +230,7 @@ async function saveGuide(form) {
   if(!pasted&&!safeMedia(url)){notice="Insira XMLTV válido ou uma URL HTTP(S).";render("epg-url");return;}
   try{
     let xml=pasted;
-    if(!xml){ const r=await fetch(url);if(!r.ok)throw Error("HTTP "+r.status);xml=await r.text(); }
+    if(!xml) xml=await loadRemoteText(url);
     const guide=parseXMLTV(xml);
     if(!guide.programs.length)throw Error("O XMLTV não contém programas válidos.");
     p.guide=guide;if(url)p.guideUrl=url;
@@ -241,9 +246,7 @@ async function savePlaylist(form) {
   try {
     let text = pasted;
     if (!text) {
-      const response=await fetch(url, { redirect: "follow" });
-      if (!response.ok) throw new Error("HTTP " + response.status);
-      text=await response.text();
+      text=await loadRemoteText(url);
     }
     const parsed=parseM3U(text);
     if (!parsed.count) throw new Error("Nenhuma entrada de vídeo válida foi encontrada.");
@@ -256,8 +259,7 @@ async function savePlaylist(form) {
 async function refreshActive() {
   const p=activePlaylist(); if (!p?.url) return;
   try {
-    const response=await fetch(p.url); if (!response.ok) throw new Error("HTTP "+response.status);
-    const parsed=parseM3U(await response.text());
+    const parsed=parseM3U(await loadRemoteText(p.url));
     if (!parsed.count) throw new Error("A lista recebida está vazia.");
     const seen=new Set(p.items.map(i=>i.url));
     let added=0;
@@ -320,4 +322,10 @@ document.addEventListener("keydown",event=>{
   }
   if(!field && ["ArrowUp","ArrowDown","ArrowLeft","ArrowRight"].includes(event.key)) {event.preventDefault();nextFocus(event.key);}
 });
+window.auroraGoBack=goBack;
+window.auroraNativePlaybackEnded=(key,seconds,ended)=>{
+  if(ended)delete state.positions[key];
+  else if(Number.isFinite(seconds)&&seconds>=0)state.positions[key]=seconds;
+  persist();currentPlay=null;render(returnFocusKey);returnFocusKey="";
+};
 render();
