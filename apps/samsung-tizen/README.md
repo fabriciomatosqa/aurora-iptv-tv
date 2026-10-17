@@ -9,3 +9,8 @@ The prototype currently uses HTML5 video for PC preview, NOT AVPlay. AVPlay and 
 Official guides:
 https://developer.samsung.com/smarttv/develop/getting-started/creating-tv-applications.html
 https://developer.samsung.com/smarttv/develop/guides/multimedia/media-playback/using-avplay.html
+
+
+## AVPlay first integration (experimental)
+
+The shared player now probes `webapis.avplay` and uses a Samsung-specific native video plane with `prepareAsync`, a fixed 1920x1080 display rectangle, remote playback controls, and cleanup. The staged Tizen package injects the official `$WEBAPIS/webapis/webapis.js` runtime script. This has NOT been validated on Tizen hardware or the Samsung emulator. Signing remains mandatory for WGT distribution.
