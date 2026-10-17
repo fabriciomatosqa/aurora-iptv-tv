@@ -22,29 +22,45 @@ const PLATFORM_UNKNOWN="Plataforma não informada";
 const GENRE_UNKNOWN="Gênero não informado";
 const text=value=>String(value??"").trim();
 const norm=value=>text(value).normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLocaleLowerCase("pt-BR");
-const tokens=group=>text(group).split(/\s*(?:\||\/|›|»| > | :: | : )\s*/).map(x=>x.trim()).filter(Boolean);
-const common=/^(canais?|ao vivo|live|live tv|filmes?|movies?|vod|s[eé]ries?|series|tv shows|tv|uhd|4k|fhd|hd|sd)$/i;
-function matches(candidate,options) {
-  const value=norm(candidate);
-  return options.find(x=>norm(x)===value) || "";
+const cleanToken=value=>text(value)
+  .replace(/^[\s\u2666\u25c6\u2726\u2727\u2605\u2606\u2022\u00b7+\-|:\/]+/g,"")
+  .replace(/[\s\u2666\u25c6\u2726\u2727\u2605\u2606\u2022\u00b7+|:\/]+$/g,"").trim();
+const tokens=group=>text(group)
+  .split(/\s*(?:\||\/|›|»| > | :: | : )\s*/)
+  .map(cleanToken).filter(Boolean);
+function matches(candidate,options){
+  const value=norm(cleanToken(candidate));
+  return options.find(x=>norm(x)===value)||"";
+}
+function findFromGroup(group,options) {
+  for(const segment of tokens(group)){
+    const direct=matches(segment,options);
+    if(direct)return direct;
+    // Metadata strings such as "SÉRIES NETFLIX" or "NETFLIX - SÉRIES".
+    // Only accept an exact known platform/genre after removing a category label.
+    const bare=norm(segment).replace(/[()[\]]/g," ").replace(/\s+/g," ").trim();
+    const kinds=["filmes","filme","movies","movie","vod","series","serie","canais","canal",
+      "ao vivo","live tv","plataforma","plataformas","generos","genero","categoria","categorias"];
+    for(const option of options) {
+      const label=norm(option);
+      for(const kind of kinds){
+        if(bare===kind+" "+label || bare===label+" "+kind ||
+           bare===kind+" - "+label || bare===label+" - "+kind)return option;
+      }
+    }
+  }
+  return "";
 }
 function findPlatform(item) {
-  const explicit=text(item?.platform || item?.provider || "");
+  const explicit=cleanToken(item?.platform||item?.provider||"");
   if(explicit)return explicit;
-  const group=tokens(item?.group);
-  for(const g of group){const p=matches(g,KNOWN_PLATFORMS);if(p)return g;}
-  // A compound label such as "NETFLIX | Séries" is still source metadata.
-  // No fuzzy matching from title — a movie name can mention a streaming service.
-  // Do not turn generic channel genres such as "ESPORTES" into a platform.
-  // A platform is shown only when the M3U names a recognized provider or
-  // explicitly supplies the provider/platform attribute.
-  return PLATFORM_UNKNOWN;
+  // Never extract a streaming provider from the title of a movie or episode.
+  return findFromGroup(item?.group,KNOWN_PLATFORMS)||PLATFORM_UNKNOWN;
 }
 function findGenre(item) {
-  const explicit=text(item?.genre || item?.category || "");
+  const explicit=cleanToken(item?.genre||item?.category||"");
   if(explicit)return explicit;
-  for(const g of tokens(item?.group)){const found=matches(g,GENRES);if(found)return g;}
-  return GENRE_UNKNOWN;
+  return findFromGroup(item?.group,GENRES)||GENRE_UNKNOWN;
 }
 export const lgPlatform=item=>findPlatform(item);
 export const lgGenre=item=>findGenre(item);
@@ -57,7 +73,11 @@ export function lgFacetsFrom(items, field) {
     counts.set(label,(counts.get(label)||0)+1);
   }
   return [...counts.entries()].map(([key,count])=>({key,label:key,count}))
-    .sort((a,b)=>a.label.localeCompare(b.label,"pt-BR",{numeric:true,sensitivity:"base"}));
+    .sort((a,b)=>{
+      const unknown=x=>/^(?:plataforma|gênero) não informad[ao]$/i.test(x.label);
+      if(unknown(a)!==unknown(b))return unknown(a)?1:-1;
+      return a.label.localeCompare(b.label,"pt-BR",{numeric:true,sensitivity:"base"});
+    });
 }
 
 export function lgSeriesGroups(items) {
