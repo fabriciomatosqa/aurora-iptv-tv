@@ -24,7 +24,7 @@ async function addChannels(page, count = 12) {
   await page.locator('[data-focus="nav-live"]').click();
 }
 
-test("LG TV 26 has dedicated shell, readable sidebar, and four catalogue columns", async ({page}) => {
+test("LG TV 26 has fixed two-level navigation and three catalogue columns", async ({page}) => {
   await addChannels(page);
   await expect(page.locator("body")).toHaveClass(/lg-tv/);
   await expect(page.getByRole("heading",{name:"Ao Vivo"})).toBeVisible();
@@ -32,18 +32,20 @@ test("LG TV 26 has dedicated shell, readable sidebar, and four catalogue columns
     const cards=[...document.querySelectorAll(".cards > .card")];
     return {
       first: cards[0].getBoundingClientRect().toJSON(),
+      third: cards[2].getBoundingClientRect().toJSON(),
       fourth: cards[3].getBoundingClientRect().toJSON(),
-      fifth: cards[4].getBoundingClientRect().toJSON(),
       font: parseFloat(getComputedStyle(cards[0].querySelector(".card-title")).fontSize),
       navigation: parseFloat(getComputedStyle(document.querySelector(".nav button")).fontSize),
       width: document.documentElement.scrollWidth,
       viewport: window.innerWidth
     };
   });
-  expect(metrics.fourth.y).toBe(metrics.first.y);
-  expect(metrics.fifth.y).toBeGreaterThan(metrics.first.y+100);
-  expect(metrics.font).toBeGreaterThanOrEqual(18);
-  expect(metrics.navigation).toBeGreaterThanOrEqual(18);
+  expect(metrics.third.y).toBe(metrics.first.y);
+  expect(metrics.fourth.y).toBeGreaterThan(metrics.first.y+100);
+  expect(metrics.font).toBeGreaterThanOrEqual(17);
+  expect(metrics.navigation).toBeGreaterThanOrEqual(16);
+  await expect(page.locator(".lg-secondary")).toBeVisible();
+  await expect(page.locator(".lg-secondary-item").first()).toContainText("Todos os conteúdos");
   expect(metrics.width).toBeLessThanOrEqual(metrics.viewport+1);
   await page.screenshot({path:"dist/lg-visual-report/lg-720p-catalogue.png",fullPage:false});
 });
@@ -99,7 +101,7 @@ test("LG repairs linear TV channels mislabeled as a Series category",async({page
   await expect(page.getByRole("button",{name:/Abrir A&E/})).toHaveCount(0);
   // The corrected classification must also survive a full Simulator reload.
   await page.reload();
-  await page.locator('[data-focus="nav-live"]').click();
+  await page.locator('[data-focus="home-live"]').click();
   await expect(page.getByRole("button",{name:"Abrir AMC HD"})).toBeVisible();
   await page.locator('[data-focus="nav-settings"]').click();
   await expect(page.locator(".lg-import-audit")).toContainText("Entradas M3U encontradas");
@@ -107,6 +109,7 @@ test("LG repairs linear TV channels mislabeled as a Series category",async({page
 });
 
 test("LG classifies a playback failure as warning, not as success", async ({page}) => {
+  await page.locator('[data-focus="nav-settings"]').click();
   await page.locator("main").evaluate(main => {
     const banner=document.createElement("div");
     banner.className="notice";
@@ -124,4 +127,69 @@ test("LG 1080p and 4K logical viewports do not horizontally overflow", async ({p
     const sizes=await page.evaluate(()=>({scroll:document.documentElement.scrollWidth,view:window.innerWidth}));
     expect(sizes.scroll).toBeLessThanOrEqual(sizes.view+1);
   }
+});
+
+
+test("LG welcomes with three large types and separate favorites/history shortcuts", async ({page}) => {
+  await expect(page.locator("#app")).toHaveClass(/lg-home-mode/);
+  await expect(page.getByRole("heading",{name:/O que vamos assistir/})).toBeVisible();
+  for(const item of ["live","movies","series","favorites","history"]){
+    await expect(page.locator('[data-focus="home-'+item+'"]')).toBeVisible();
+  }
+  const count=await page.locator(".lg-home-primary .lg-home-tile").count();
+  expect(count).toBe(3);
+  const second=await page.locator(".lg-home-shortcuts .lg-home-tile").count();
+  expect(second).toBe(2);
+  await page.screenshot({path:"dist/lg-visual-report/lg-720p-home.png",fullPage:false});
+});
+
+test("LG primary tiles navigate with D-pad to a fixed category and subcategory column",async({page})=>{
+  const live=page.locator('[data-focus="home-live"]');
+  await live.focus();
+  await page.keyboard.press("ArrowRight");
+  await expect(page.locator('[data-focus="home-movies"]')).toBeFocused();
+  await page.keyboard.press("ArrowLeft");
+  await expect(live).toBeFocused();
+  await page.keyboard.press("Enter");
+  await expect(page.locator("#app")).toHaveClass(/lg-library-mode/);
+  await expect(page.locator(".lg-secondary")).toBeVisible();
+  await expect(page.locator(".sidebar")).toBeVisible();
+  await expect(page.getByRole("heading",{name:"Ao Vivo"})).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(page.locator("#app")).toHaveClass(/lg-home-mode/);
+});
+
+test("LG M3U subcategories filter the full catalog and can be reset via Todos",async({page})=>{
+  const m3u=[
+    '#EXTM3U',
+    '#EXTINF:-1 group-title="CANAIS | ESPORTES",Canal Esporte 1',
+    'https://example.test/sport1.m3u8',
+    '#EXTINF:-1 group-title="CANAIS | ESPORTES",Canal Esporte 2',
+    'https://example.test/sport2.m3u8',
+    '#EXTINF:-1 group-title="CANAIS | NOTÍCIAS",Canal Notícias',
+    'https://example.test/news.m3u8'
+  ].join("\n");
+  await page.locator('[data-focus="nav-settings"]').click();
+  await page.locator('input[name="name"]').fill("Grupos por emissora");
+  await page.locator('textarea[name="m3u"]').fill(m3u);
+  await page.locator("#playlist-form").getByRole("button",{name:"Salvar playlist"}).click();
+  await page.locator('[data-focus="nav-live"]').click();
+  await expect(page.locator(".cards > .card")).toHaveCount(3);
+  await expect(page.locator(".lg-secondary-list")).toContainText("ESPORTES");
+  await expect(page.locator(".lg-secondary-list")).toContainText("NOTÍCIAS");
+  await page.locator('[data-lg-group="CANAIS | ESPORTES"]').click();
+  await expect(page.locator(".cards > .card")).toHaveCount(2);
+  await expect(page.locator(".cards > .card").first()).toContainText("Esporte");
+  await page.locator('input[data-input="search"]').fill("2");
+  await expect(page.locator(".cards > .card")).toHaveCount(1);
+  await page.locator('[data-lg-group="__all__"]').click();
+  await expect(page.locator(".cards > .card")).toHaveCount(3);
+});
+
+test("LG opens history from the home dashboard, even without recent items",async({page})=>{
+  await page.locator('[data-focus="home-history"]').click();
+  await expect(page.getByRole("heading",{name:"Histórico"})).toBeVisible();
+  await expect(page.locator(".lg-secondary")).toBeVisible();
+  await page.locator('[data-focus="nav-home"]').click();
+  await expect(page.locator('[data-focus="home-favorites"]')).toBeVisible();
 });
