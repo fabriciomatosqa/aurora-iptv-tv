@@ -410,7 +410,18 @@ function startPlayer(item) {
     if (sec>0 && Math.abs(lastPositionUpdate-sec)>=5) { state.positions[key]=sec; lastPositionUpdate=sec; persist(); }
   });
   vid.addEventListener("ended",()=>{delete state.positions[key];persist();});
-  vid.addEventListener("error",()=>{notice="O dispositivo/navegador não conseguiu reproduzir esta mídia. Confira o formato, acesso e codecs.";});
+  vid.addEventListener("error",()=>{
+     const msg="O dispositivo/navegador não conseguiu reproduzir esta mídia. Confira formato, acesso e codecs.";
+     if(!lgTv){notice=msg;return;}
+     const screen=playerRoot.querySelector(".player-screen");
+     if(screen&&!screen.querySelector(".lg-player-error")){
+       const box=document.createElement("div");
+       box.className="lg-player-error";
+       box.setAttribute("role","alert");
+       box.textContent=msg+" Pressione Voltar para selecionar outro conteúdo.";
+       screen.appendChild(box);
+     }
+   });
   vid.play().catch(()=>{ /* Browser may require explicit playback gesture. */ });
   vid.focus();
   scheduleHideControls();
