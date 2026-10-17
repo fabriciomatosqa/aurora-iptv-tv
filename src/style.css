@@ -117,3 +117,8 @@ details summary{cursor:pointer;color:#95e8cf}
 .theme-light .btn.primary{background:#117b6c;border-color:#117b6c;color:white}
 .theme-light .playlist-line,.theme-light .football-row{background:#e8f4f5;color:#163847;border-color:#aacbd0}
 .theme-light .guide-row span,.theme-light .football-time{color:#3b6475}
+
+/* AVPlay uses Samsung's native video plane under transparent UI controls. */
+.tizen-screen{background:transparent}
+.tizen-screen .player-header{z-index:24}
+#tizen-player-error{position:absolute;bottom:9%;left:7%;right:7%;text-align:center;color:#ffe3da;font-size:24px;z-index:25}
