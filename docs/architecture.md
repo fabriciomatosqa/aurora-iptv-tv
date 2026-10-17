@@ -24,3 +24,7 @@ Native packages; license/DRM interoperability; EPG ingestion; football sports fe
 localStorage in the prototype is NOT an encrypted credential vault and has a small storage quota. Do not use real private provider credentials in shared browser instances. Production will need local secure stores and streaming catalogue import backed by SQLite/IndexedDB or equivalent.
 
 A playlist URL can contain login credentials. Never commit it to Git. Do not log it, send it to third-party services, or add provider streams to automated CI.
+
+## Revisão 0.2.0
+
+O protótipo implementou importação XMLTV, agenda de confrontos sem placares falsos, PIN PBKDF2, sincronização diária básica, integração Android Media3 e builds de desenvolvimento webOS. Ainda depende de validação real nas TVs e de arquitetura de cache escalável (IndexedDB/SQLite).
