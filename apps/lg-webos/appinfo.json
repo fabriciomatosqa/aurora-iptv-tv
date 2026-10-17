@@ -1,0 +1,11 @@
+{
+  "id": "com.auroraiptv.tv",
+  "title": "AURORA IPTV TV",
+  "version": "0.2.0",
+  "vendor": "AURORA IPTV",
+  "type": "web",
+  "main": "index.html",
+  "transparent": false,
+  "icon": "icon.png",
+  "largeIcon": "largeicon.png"
+}

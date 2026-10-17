@@ -1,28 +1,48 @@
-# AURORA IPTV TV
+# AURORA IPTV TV — Prévia 0.2.0
 
-Aplicativo de IPTV para televisores, independente dos clientes Android e Desktop do ecossistema AURORA.
+Aplicativo independente de IPTV para Smart TVs; sem canais, playlists ou credenciais incluídos.
 
-## Plataformas
+## Recursos implementados na prévia
 
-- Android TV / Google TV — adaptação e Media3 na fase nativa.
-- Samsung Tizen — pacote web para TV, com player AVPlay em etapa própria.
-- LG webOS — pacote web, com adaptador próprio do player.
-- Hisense VIDAA — viabilidade e distribuição condicionadas ao acesso às ferramentas e aprovação do fabricante.
+- TV-first, ícones vetoriais, navegação D-pad, modo claro/escuro.
+- Múltiplas playlists M3U, troca de listas, busca, favoritos e retomada de VOD.
+- Separação conservadora de canais, filmes, séries e episódios agrupados.
+- EPG/XMLTV manual, programação atual e confrontos de futebol identificados no guia, sem resultados fictícios.
+- PIN parental com PBKDF2 e conteúdo +18 oculto até desbloqueio.
+- Uma tentativa de atualização automática de playlist por dia.
+- Projeto Android TV com player Media3 e ponte de rede; montagem de APK no GitHub Actions.
+- Pacote LG webOS de desenvolvimento via CLI oficial e preparação Samsung Tizen.
 
-**O aplicativo não fornece listas, canais ou conteúdo protegido.** As playlists são de responsabilidade do usuário.
+## Testar no computador
 
-## Status
+```sh
+git clone -b feature/tv-first-prototype https://github.com/fabriciomatosqa/aurora-iptv-tv.git
+cd aurora-iptv-tv
+python3 -m http.server 8080
+```
 
-🚧 Versão inicial de desenvolvimento. Este repositório começa com documentação e um protótipo de interface TV-first. Nenhuma plataforma é considerada validada em hardware real até passar pelos testes correspondentes.
+No Windows, substitua python3 por python. Depois abra http://localhost:8080. Use setas, Enter e Esc.
+Em Configurações, cole um M3U autorizado ou URL com CORS habilitado. Há um vídeo livre de teste.
 
-## Objetivos iniciais
+## Verificações
 
-Navegação por controle remoto, foco visível, layout de 10 pés, playlist M3U, categorias conservadoras, favoritos persistentes e player de demonstração. Funcionalidades e pacotes nativos serão implementados gradualmente.
+```sh
+npm run check
+npm test
+npm run package:tv
+npm install
+npx playwright install chromium
+npm run test:ui
+```
 
-## Execução local
+GitHub Actions → Build Android TV developer APK → Artifacts → aurora-iptv-tv-android-debug-apk (somente se o build tiver sucesso).
+GitHub Actions → Build LG webOS developer IPK → Artifacts → aurora-iptv-tv-lg-webos-dev-ipk (somente se o build tiver sucesso).
+Samsung exige um certificado Tizen válido para gerar WGT instalável. VIDAA depende de acesso autorizado ao SDK.
 
-Após a chegada dos arquivos do protótipo, na raiz do repositório, execute `python -m http.server 8080` (Windows) ou `python3 -m http.server 8080` (Linux) e abra `http://localhost:8080`. As teclas de seta, Enter, Esc e Backspace simulam o controle remoto.
+## Limites atuais
 
-## Licença e distribuição
+Compilar não equivale a testar numa TV real. O protótipo usa localStorage (inadequado para listas gigantes ou segredos em computadores compartilhados).
+A ponte Android possui limite preliminar de 16 MB por resposta. DRM, compatibilidade de codecs, outros idiomas completos e players de Tizen/VIDAA ainda precisam ser desenvolvidos/validados.
+Ícones da versão de desenvolvimento webOS são provisórios e serão substituídos pelo branding Aurora oficial.
 
-A publicação nas lojas depende das regras dos respectivos fabricantes. O código-fonte não carrega chaves, senhas ou playlists privadas.
+Consulte docs/testing.md, docs/architecture.md e apps/*/README.md para as diferenças de plataforma.
