@@ -64,3 +64,40 @@ test("LG helpers escape M3U names before HTML insertion",()=>{
   assert.equal(lgRail({title:"Plat",subtitle:"",items:[{key:"x",label:"Test <script>"}],selectedKey:"x",action:"lg-filter",kind:"first",focusPrefix:"lg-first"}).includes("<script>"),false);
   assert.equal(lgFootballHomeMarkup([{home:'<img src=x>',away:"B",channel:live("Channel","Globoplay"),program:{start:Date.now(),stop:Date.now()+100000},status:"AO VIVO"}],()=>0).includes("<img src=x>"),false);
 });
+
+test("LG recognizes decorated provider groups actually supplied by M3U",()=>{
+  const ep=series("(A)mar S01E01","♦ Netflix");
+  const crunchy=series("Jujutsu Kaisen S01E01","✦ Crunchyroll");
+  const marvel=film("Aventura VOD","FILMES | ✦ Disney+");
+  assert.equal(lgPlatform(ep),"Netflix");
+  assert.equal(lgPlatform(crunchy),"Crunchyroll");
+  assert.equal(lgPlatform(marvel),"Disney+");
+  const groups=lgSeriesGroups([ep,crunchy]);
+  assert.deepEqual(groups.map(g=>g.platform).sort(),["Crunchyroll","Netflix"]);
+});
+test("LG prefers genuine platform and genre over unclassified bucket in first column",()=>{
+  const all=[
+    film("Sem gênero","Filmes"),
+    film("Drama 1","Filmes | Drama | Netflix"),
+    film("Ação 1","Filmes | Ação | Netflix")
+  ];
+  const m=lgBrowseModel("movies",all,null,{});
+  assert.equal(m.genre,"Ação");
+  assert.equal(m.platform,"Netflix");
+  assert.deepEqual(m.movies.map(x=>x.title),["Ação 1"]);
+  assert.equal(m.genres.at(-1).label,GENRE_UNKNOWN);
+});
+test("LG rail searches full list before limiting DOM rows",()=>{
+  const source=Array.from({length:450},(_,i)=>({key:String(i),label:"Série número "+i}));
+  const html=lgRail({title:"Séries",subtitle:"",items:source,selectedKey:"449",action:"lg-filter",
+    kind:"second",focusPrefix:"lg-second",query:"449",limit:30});
+  assert.ok(html.includes("Série número 449"));
+  assert.equal(html.includes("Série número 448"),false);
+  assert.ok(html.includes('data-row="449"'));
+});
+test("LG legacy unknown sources remain accessible for manual classification",()=>{
+  const items=[film("Only one","Filmes | Netflix"),live("Canal", "Canais")];
+  const model=lgBrowseModel("movies",items,null,{});
+  assert.equal(model.movies.length,1);
+  assert.equal(model.movies[0].title,"Only one");
+});
