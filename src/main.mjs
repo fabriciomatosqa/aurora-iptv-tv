@@ -5,6 +5,7 @@ import { loadRemoteText, hasNativePlayer, startNative } from "./core/native.mjs"
 import {isRestricted,createPin,verifyPin} from "./core/parental.mjs";
 import {needsDailyUpdate,localDay,mergePlaylist} from "./core/updates.mjs";
 import {remoteKey,registerRemoteKeys} from "./core/remote.mjs";
+import {hasTizenPlayer,startTizenPlayer,tizenPositionSeconds,toggleTizenPlayback,seekTizen,stopTizenPlayer} from "./core/tizen-player.mjs";
 import {loadCatalog,saveCatalog,loadGuide,saveGuide as saveGuideDB,deletePlaylistData} from "./core/catalog-db.mjs";
 import { focusFirst, restoreFocus, nextFocus } from "./core/focus.mjs";
 
@@ -34,7 +35,7 @@ function safeMedia(v) { try { const u = new URL(v); return ["http:", "https:"].i
 const testItem = { title: "Vídeo livre de demonstração (CC0)", group: "Demonstração", type: "movies", logo: "", url: "https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4" };
 let route = "home", history = [], search = "", currentSeries = null, currentPlay = null;
 let displayItems = [], notice = "", lastPositionUpdate = -1, hideTimer = null, returnFocusKey = "";
-let parentUnlocked = false, pinFailures = 0, pinBlockedUntil = 0;
+let parentUnlocked = false, pinFailures = 0, pinBlockedUntil = 0, tizenPlaying = false;
 function allowed(item) { return !isRestricted(item) || (Boolean(state.parental) && parentUnlocked); }
 function activePlaylist() { return state.playlists.find(p => p.id === state.activeId) || null; }
 function items() { return activePlaylist()?.items || []; }
@@ -205,6 +206,16 @@ function startPlayer(item) {
     startNative(item,key,state.positions[key]||0);
     return;
   }
+  if (hasTizenPlayer()) {
+    playerRoot.innerHTML='<div class="player-screen tizen-screen" role="dialog" aria-label="AVPlay"><div class="player-header">'+
+      '<h3>'+esc(item.title)+'</h3><div class="actions"><button class="btn" data-focus="close-player" data-action="close-player">'+icon("back")+' Voltar</button></div></div>'+
+      '<div id="tizen-player-error" role="alert"></div></div>';
+    tizenPlaying=startTizenPlayer(url,state.positions[key]||0,
+      msg=>{const box=playerRoot.querySelector("#tizen-player-error");if(box)box.textContent=msg;},
+      ()=>{delete state.positions[key];persist();closePlayer();});
+    if(tizenPlaying){playerRoot.querySelector('[data-action="close-player"]')?.focus();scheduleHideControls();return;}
+    playerRoot.innerHTML="";
+  }
   const liked = state.favorites.includes(key);
   playerRoot.innerHTML = '<div class="player-screen" role="dialog" aria-label="Reprodutor de vídeo"><div class="player-header">' +
    '<div><h3>' + esc(item.title) + '</h3><p>Retomada disponível quando o formato permite</p></div>' +
@@ -232,6 +243,12 @@ function scheduleHideControls() {
 }
 function closePlayer() {
   if (!currentPlay) return;
+  if(tizenPlaying){
+    const key=itemKey(currentPlay,state.activeId),seconds=tizenPositionSeconds();
+    if(seconds>0 && state.positions[key]!==0)state.positions[key]=Math.floor(seconds);
+    stopTizenPlayer();tizenPlaying=false;persist();clearTimeout(hideTimer);
+    playerRoot.innerHTML="";currentPlay=null;render(returnFocusKey);returnFocusKey="";return;
+  }
   const vid=playerRoot.querySelector("video");
   if (vid && Number.isFinite(vid.currentTime) && vid.currentTime>0 && !vid.ended) {
     state.positions[itemKey(currentPlay,state.activeId)]=Math.floor(vid.currentTime); persist();
@@ -370,6 +387,13 @@ document.addEventListener("keydown",event=>{
   if(key==="Escape" || (key==="Backspace"&&!field)) {event.preventDefault();goBack();return;}
   if(currentPlay){
     scheduleHideControls();
+    if(tizenPlaying){
+      if(key==="PlayPause"){event.preventDefault();toggleTizenPlayback();}
+      if(key==="FastForward"){event.preventDefault();seekTizen(15);}
+      if(key==="Rewind"){event.preventDefault();seekTizen(-15);}
+      if(["ArrowUp","ArrowDown","ArrowLeft","ArrowRight"].includes(key)){event.preventDefault();nextFocus(key,playerRoot);}
+      return;
+    }
     const vid=playerRoot.querySelector("video");
     if(["ArrowUp","ArrowDown","ArrowLeft","ArrowRight"].includes(key) && !field) {
       event.preventDefault();nextFocus(key,playerRoot);return;
