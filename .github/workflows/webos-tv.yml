@@ -14,6 +14,19 @@ jobs:
           node-version: "24"
       - run: npm run check && npm test
       - run: npm run package:tv
+      - name: Verify unpacked Simulator app
+        run: |
+          test -s dist/lg-webos/appinfo.json
+          test -s dist/lg-webos/index.html
+          test -s dist/lg-webos/src/main.mjs
+          node -e 'const fs=require("fs");const p=JSON.parse(fs.readFileSync("dist/lg-webos/appinfo.json"));if(!fs.existsSync("dist/lg-webos/"+p.main))process.exit(1)'
+      - name: Upload webOS TV 26 Simulator folder
+        uses: actions/upload-artifact@v4
+        with:
+          name: aurora-iptv-tv-lg-simulator-folder
+          path: dist/lg-webos/
+          include-hidden-files: true
+          if-no-files-found: error
       - name: Install official webOS tools
         run: npm install -g @webos-tools/cli@3.2.6
       - name: Package LG developer IPK
