@@ -19,7 +19,27 @@ jobs:
           test -s dist/lg-webos/appinfo.json
           test -s dist/lg-webos/index.html
           test -s dist/lg-webos/src/main.mjs
+          test -s dist/lg-webos/lg-tv.css
+          test -s dist/lg-webos/lg-ui.mjs
+          grep -q 'class="lg-tv"' dist/lg-webos/index.html
           node -e 'const fs=require("fs");const p=JSON.parse(fs.readFileSync("dist/lg-webos/appinfo.json"));if(!fs.existsSync("dist/lg-webos/"+p.main))process.exit(1)'
+      - name: Check LG-specific UI JavaScript
+        run: node --check dist/lg-webos/lg-ui.mjs
+      - name: Install Chromium for LG UI checks
+        run: |
+          npm install --no-audit --no-fund
+          npx playwright install --with-deps chromium
+      - name: Test LG UI layout and remote controls
+        run: npx playwright test --config playwright.lg.config.mjs
+      - name: Upload LG visual test report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: aurora-iptv-tv-lg-visual-tests
+          path: |
+            dist/lg-visual-report/
+            test-results/
+          if-no-files-found: ignore
       - name: Upload webOS TV 26 Simulator folder
         uses: actions/upload-artifact@v4
         with:
