@@ -81,13 +81,31 @@ export function extractFixture(title) {
   return {home,away};
 }
 export function footballFromEpg(items,guide,now=Date.now()) {
+  const programs=guide?.programs||[];
+  const ids=new Set(programs.map(p=>p.channel));
+  const channelNames=new Map();
+  for(const ch of guide?.channels||[]){
+    const key=canon(ch.name);
+    if(!channelNames.has(key))channelNames.set(key,[]);
+    channelNames.get(key).push(ch.id);
+  }
+  const matched=new Map();
+  for(const item of items||[]){
+    if(item.type!=="live")continue;
+    let id=String(item.tvgId||"").trim();
+    if(!id || !ids.has(id)) {
+      const possible=channelNames.get(canon(item.title))||[];
+      id=possible.length===1&&ids.has(possible[0])?possible[0]:"";
+    }
+    if(id && !matched.has(id))matched.set(id,item);
+  }
   const byId=new Map();
-  for(const p of guide?.programs||[]){
+  for(const p of programs){
     if(p.stop<now-60*60_000 || p.start>now+21*24*60*60_000)continue;
+    const item=matched.get(p.channel);
+    if(!item)continue;
     const teams=extractFixture(p.title);
     if(!teams)continue;
-    const item=(items||[]).find(i=>i.type==="live"&&matchGuideChannel(i,guide)===p.channel);
-    if(!item)continue;
     const key=p.channel+"|"+p.start+"|"+p.title;
     if(byId.has(key))continue;
     byId.set(key,{...teams,channel:item,program:p,isReprise:/\breprise\b|retransmiss[aã]o/i.test(p.title+" "+p.description)});
