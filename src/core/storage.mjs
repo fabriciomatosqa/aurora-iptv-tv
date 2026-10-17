@@ -8,7 +8,11 @@ export function loadState() {
   } catch { return empty(); }
 }
 export function saveState(state) {
-  try { localStorage.setItem(KEY, JSON.stringify(state)); return true; }
+  try {
+    // Catalog and guide live in IndexedDB, not in localStorage's tiny quota.
+    const compact={...state,playlists:state.playlists.map(({items,guide,...meta})=>meta)};
+    localStorage.setItem(KEY,JSON.stringify(compact));return true;
+  }
   catch { return false; }
 }
 export function itemKey(item, playlistId) {
