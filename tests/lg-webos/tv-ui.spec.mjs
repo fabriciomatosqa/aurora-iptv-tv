@@ -97,6 +97,13 @@ test("LG repairs linear TV channels mislabeled as a Series category",async({page
   await page.locator('[data-focus="nav-series"]').click();
   await expect(page.getByRole("button",{name:/Abrir Drama/})).toBeVisible();
   await expect(page.getByRole("button",{name:/Abrir A&E/})).toHaveCount(0);
+  // The corrected classification must also survive a full Simulator reload.
+  await page.reload();
+  await page.locator('[data-focus="nav-live"]').click();
+  await expect(page.getByRole("button",{name:"Abrir AMC HD"})).toBeVisible();
+  await page.locator('[data-focus="nav-settings"]').click();
+  await expect(page.locator(".lg-import-audit")).toContainText("Entradas M3U encontradas");
+  await expect(page.locator(".lg-import-audit")).toContainText("3");
 });
 
 test("LG classifies a playback failure as warning, not as success", async ({page}) => {
