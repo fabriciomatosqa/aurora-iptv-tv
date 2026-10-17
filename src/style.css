@@ -84,3 +84,13 @@ details summary{cursor:pointer;color:#95e8cf}
 @media(max-width:1060px){#app{grid-template-columns:80px minmax(0,1fr)}.sidebar{padding:20px 10px}.logo{justify-content:center;padding:9px 0}.logo-name,.logo-sub,.nav span,.sidebar-bottom{display:none}.nav button{justify-content:center;padding:12px}.hero{min-height:230px}.cards{grid-template-columns:repeat(auto-fill,minmax(150px,1fr))}}
 @media(max-width:680px){#app{grid-template-columns:62px minmax(0,1fr)}main{padding:15px}.hero{padding:22px;min-height:220px}h1{font-size:34px}.cards{grid-template-columns:repeat(2,minmax(0,1fr))}.card-art{height:90px}.card{min-height:145px}.stats{gap:8px}.stat{min-width:90px;padding:12px}.nav button{min-height:47px}.settings-grid{grid-template-columns:minmax(0,1fr)}}
 @media(prefers-reduced-motion:reduce){*,*:before,*:after{scroll-behavior:auto!important;transition:none!important}}
+
+/* Programme guide and fixtures */
+.guide-row{width:100%;cursor:pointer;background:#122c3b;color:#d8eaf2;text-align:left;flex-wrap:wrap}
+.guide-row span{font-size:14px;color:#a3cad0;flex:1;min-width:180px}
+.football-list{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:12px}
+.football-row{padding:22px;background:linear-gradient(125deg,#112b3b,#203a47);border:1px solid #5b889370;color:#e4f3f9;border-radius:17px;text-align:left;cursor:pointer;min-height:118px}
+.football-teams{font-size:21px;font-weight:700}
+.football-teams strong{color:#6de8c4}
+.football-time{margin-top:14px;color:#b0cad5;font-size:14px}
+@media(max-width:690px){.football-list{grid-template-columns:minmax(0,1fr)}}
