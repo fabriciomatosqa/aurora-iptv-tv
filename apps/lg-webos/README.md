@@ -68,3 +68,22 @@ O último comando testa a pasta gerada `dist/lg-webos`, e não o HTML compartilh
 
 Abra o workflow `Build LG webOS developer IPK` da branch `feature/lg-webos-tv-ui-first-pass`, baixe o artefato `aurora-iptv-tv-lg-simulator-folder`, extraia e selecione diretamente a pasta que contém `appinfo.json`.
 Confira se o logo fica no mesmo lugar ao rolar até canais distantes. Abra `Ao Vivo` e `Séries` e verifique a classificação. Em `Configurações`, veja os totais efetivamente importados e as entradas inválidas.
+
+## LG 0.3.0 — Aurora Home e catálogo em duas colunas de navegação
+
+Referência visual enviada pelo usuário: painel de TV com três grandes entradas de conteúdo (Ao Vivo, Filmes, Séries) e dois atalhos (Favoritos, Histórico).
+
+### Alterações exclusivas à LG
+- Nova página inicial sem a antiga barra lateral: logo Aurora, data/hora local, acesso a Configurações e cartões grandes Ao Vivo, Filmes, Séries, Favoritos e Histórico; atalho para Futebol na base.
+- Ao selecionar um tipo, são exibidas duas colunas **fixas** à esquerda: navegação principal (Início, Ao Vivo, Filmes, Séries, Favoritos, Histórico, Futebol e Configurações) e subcategorias derivadas diretamente dos grupos reais `group-title` da M3U.
+- O painel da direita mostra cartões do grupo escolhido; há opção **Todos os conteúdos** e busca dentro do grupo ativo. A lista completa continua sendo percorrida com carregamento incremental de 48 cards.
+- Seleção com controle remoto ganha foco visível nas duas colunas e nos cards. Ambas as colunas rolam independentemente, enquanto o menu principal permanece parado quando o catálogo rola.
+- Favoritos e Histórico integram a mesma navegação, sem apagar listas, arquivos de cache, EPG ou retomada.
+- Subcategorias inexistentes não são inventadas: etiquetas e contagens são extraídas dos itens presentes na playlist, sem comunicação com serviços externos.
+
+### Download e validação
+- Branch: `feature/lg-webos-home-and-categories`.
+- GitHub Actions: `Build LG webOS developer IPK`, baixar **aurora-iptv-tv-lg-simulator-folder** de uma execução aprovada dessa branch.
+- Extraia o ZIP e selecione a pasta que contém `appinfo.json` no LG webOS TV 26 Simulator.
+- Teste sequência: Início → Ao Vivo → subcategoria → card; Voltar → Início; Filmes e Séries; Favoritos/Histórico; Configurações.
+- Compilação e Chromium automatizado não substituem teste em hardware LG real.
