@@ -35,11 +35,9 @@ function findPlatform(item) {
   for(const g of group){const p=matches(g,KNOWN_PLATFORMS);if(p)return g;}
   // A compound label such as "NETFLIX | Séries" is still source metadata.
   // No fuzzy matching from title — a movie name can mention a streaming service.
-  if(item?.type==="live"){
-    const remaining=group.filter(g=>!common.test(g) && !matches(g,GENRES));
-    // Channel bundles use names such as "BAND | Notícias".
-    if(remaining.length && group.length>1)return remaining[0];
-  }
+  // Do not turn generic channel genres such as "ESPORTES" into a platform.
+  // A platform is shown only when the M3U names a recognized provider or
+  // explicitly supplies the provider/platform attribute.
   return PLATFORM_UNKNOWN;
 }
 function findGenre(item) {
