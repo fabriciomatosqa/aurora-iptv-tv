@@ -87,3 +87,21 @@ Referência visual enviada pelo usuário: painel de TV com três grandes entrada
 - Extraia o ZIP e selecione a pasta que contém `appinfo.json` no LG webOS TV 26 Simulator.
 - Teste sequência: Início → Ao Vivo → subcategoria → card; Voltar → Início; Filmes e Séries; Favoritos/Histórico; Configurações.
 - Compilação e Chromium automatizado não substituem teste em hardware LG real.
+
+## LG 0.4.0 — navegação específica por conteúdo
+
+Esta atualização altera **exclusivamente a experiência LG webOS**. A Home mantém os cartões grandes. O painel Futebol mostra confrontos encontrados nos horários reais do XMLTV, um botão por jogo; ao selecionar, abre o canal associado sem navegar antes para a lista de canais. Sem EPG válido, exibe informação de ausência, nunca partidas fictícias.
+
+- **Ao Vivo:** plataforma (da M3U) → canal (exclusivamente conteúdo tipo `live`) → EPG do canal, com programa atual, próximos programas e botão **Assistir canal**.
+- **Filmes:** gênero (quando informado pelo `group-title` ou metadados explícitos) → plataforma → filmes com filtragem real.
+- **Séries:** plataforma → séries agrupadas por título e plataforma → episódios ordenados por temporada/episódio identificados no título. Pode favoritar a série; os episódios abrem diretamente.
+- Navegação por D-pad, OK e Voltar. Estado do filtro é preservado durante a troca para Configurações e retorno. As três colunas são independentes, com rolagem própria.
+- Quando a playlist não fornece gênero ou plataforma, a interface exibe explicitamente **Gênero não informado** ou **Plataforma não informada**, sem deduzir categorias a partir de nomes de filmes ou canais.
+- A área Futebol usa canais correspondentes ao XMLTV importado e mantém o tempo da transmissão, sem placares ou partidas inventadas.
+- O parser de listas do projeto e os players de outras plataformas foram preservados; componentes novos usam `lgTv` e CSS empacotado apenas no webOS.
+- Persistência de listas e favoritos, controle parental +18, EPG e carregamento progressivo de filmes seguem utilizando as funções existentes.
+
+### Como testar
+Acesse a execução verde mais recente da branch `feature/lg-webos-triple-navigation` no workflow **Build LG webOS developer IPK**. Em *Artifacts*, baixe **aurora-iptv-tv-lg-simulator-folder**, extraia e selecione a pasta com `appinfo.json` no webOS TV 26 Simulator. O IPK de desenvolvimento é separado.
+
+**Limitações:** Plataformas/gêneros dependem da organização do provedor na M3U; conteúdo sem metadados não pode ser classificado por empresa sem dados externos; streaming e codecs dependem da compatibilidade do simulador e da TV real. Jogos aparecem quando o XMLTV possui confrontos identificáveis e canal correspondente.
