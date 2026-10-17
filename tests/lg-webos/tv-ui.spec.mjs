@@ -132,3 +132,49 @@ test("LG preserves filters when returning from Settings and supports TV viewport
     expect(dims.scroll).toBeLessThanOrEqual(dims.view+1);
   }
 });
+
+
+test("LG classifies mixed FILMES E SÉRIES live logos as TV, not as movies",async({page})=>{
+  await importM3U(page,[
+    entry("FILMES E SÉRIES","A&E FHD","https://example.test/ae.m3u8"),
+    entry("FILMES E SÉRIES","AMC HD","https://example.test/amc.m3u8"),
+    entry("FILMES E SÉRIES","AXN SD","https://example.test/axn.m3u8"),
+    entry("Filmes | Drama | Netflix","Filme de Drama","https://example.test/movie/5.mp4"),
+    entry("Séries | ♦ Netflix","(A)mar S01E01","https://example.test/series/11.mp4")
+  ],"M3U problemática corrigida");
+  await page.locator('[data-focus="nav-live"]').click();
+  await expect(page.locator(".lg-v4-rail").nth(1)).toContainText("A&E FHD");
+  await expect(page.locator(".lg-v4-rail").nth(1)).toContainText("AMC HD");
+  await page.locator('[data-focus="nav-movies"]').click();
+  await expect(page.locator(".lg-v4-third")).toContainText("Filme de Drama");
+  await expect(page.locator(".lg-v4-third")).not.toContainText("A&E FHD");
+  await expect(page.locator(".lg-v4-third")).not.toContainText("AMC HD");
+  await page.locator('[data-focus="nav-series"]').click();
+  await expect(page.locator(".lg-v4-rail").first()).toContainText("Netflix");
+  await expect(page.locator(".lg-v4-rail").first()).not.toContainText("Plataforma não informada");
+  await expect(page.locator(".lg-v4-third")).toContainText("(A)mar S01E01");
+  await page.reload();
+  await page.locator('[data-focus="home-live"]').click();
+  await expect(page.locator(".lg-v4-rail").nth(1)).toContainText("AMC HD");
+});
+test("LG long channel list can search channel number beyond first 120 items",async({page})=>{
+  const entries=Array.from({length:180},(_,i)=>entry("Canais | Globoplay",
+    "Canal "+String(i).padStart(3,"0"),"https://example.test/live/"+i+".m3u8"));
+  await importM3U(page,entries);
+  await page.locator('[data-focus="nav-live"]').click();
+  await expect(page.locator(".lg-v4-row").count()).resolves.toBeGreaterThan(100);
+  await page.locator('[data-input="lg-rail-search"][data-kind="second"]').fill("Canal 179");
+  await expect(page.locator(".lg-v4-rail").nth(1).locator(".lg-v4-row")).toHaveCount(1);
+  await expect(page.locator(".lg-v4-rail").nth(1)).toContainText("Canal 179");
+});
+test("LG video errors stay inside player and never obstruct Home after going back",async({page})=>{
+  await importM3U(page,[entry("Canais | Globo","Canal Teste","https://example.test/live/test.m3u8")]);
+  await page.locator('[data-focus="nav-live"]').click();
+  await page.locator('[data-focus="lg-play"]').click();
+  await expect(page.locator(".player-screen video")).toBeVisible();
+  await page.locator(".player-screen video").evaluate(video=>video.dispatchEvent(new Event("error")));
+  await expect(page.locator(".lg-player-error")).toBeVisible();
+  await page.locator('[data-action="close-player"]').click();
+  await page.locator('[data-focus="nav-home"]').click();
+  await expect(page.locator(".lg-home-notice")).toHaveCount(0);
+});
