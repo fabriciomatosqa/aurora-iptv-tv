@@ -24,7 +24,7 @@ const text=value=>String(value??"").trim();
 const norm=value=>text(value).normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLocaleLowerCase("pt-BR");
 const cleanToken=value=>text(value)
   .replace(/^[\s\u2666\u25c6\u2726\u2727\u2605\u2606\u2022\u00b7+\-|:\/]+/g,"")
-  .replace(/[\s\u2666\u25c6\u2726\u2727\u2605\u2606\u2022\u00b7+|:\/]+$/g,"").trim();
+  .replace(/[\s\u2666\u25c6\u2726\u2727\u2605\u2606\u2022\u00b7|:\/]+$/g,"").trim();
 const tokens=group=>text(group)
   .split(/\s*(?:\||\/|›|»| > | :: | : )\s*/)
   .map(cleanToken).filter(Boolean);
