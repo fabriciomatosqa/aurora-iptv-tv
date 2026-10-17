@@ -60,6 +60,7 @@ test("LG XMLTV is displayed for the actual selected channel",async({page})=>{
   await page.locator('textarea[name="xml"]').fill(guide);
   await page.locator("#epg-form").getByRole("button",{name:"Importar programação"}).click();
   await page.locator('[data-focus="nav-live"]').click();
+  await page.locator(".lg-v4-rail").nth(1).getByRole("button",{name:/Canal Um/}).click();
   await expect(page.locator(".lg-v4-third")).toContainText("Programa Verdadeiro");
   await expect(page.locator(".lg-v4-third")).toContainText("Próxima atração");
   await expect(page.locator('[data-focus="lg-play"]')).toBeVisible();
