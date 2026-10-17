@@ -1184,3 +1184,158 @@ body.lg-tv.theme-light .lg-v4-third-title p{color:#375f73;}
   body.lg-tv .lg-v4-tabs button{padding:9px 9px;font-size:13px;}
   body.lg-tv .lg-v4-football-games{grid-template-columns:repeat(2,minmax(0,1fr));}
 }
+
+
+/* LG 0.4.1 — polish after simulator screenshots, keep three-panel model. */
+body.lg-tv .lg-v4-rail-head {padding-bottom:15px;}
+body.lg-tv .lg-v4-rail-head h2{font-size:29px;}
+body.lg-tv .lg-v4-row{min-height:65px;padding:14px 15px;}
+body.lg-tv .lg-v4-row-name{font-size:19px;line-height:1.33;}
+body.lg-tv .lg-v4-rail-search{
+  display:block;
+  width:100%;
+  min-height:47px;
+  margin-top:17px;
+  border:1px solid #5b90a397;
+  border-radius:11px;
+  padding:10px 13px;
+  background:#071a2ac7;
+  color:#f3ffff;
+  font-size:16px;
+  line-height:1.35;
+}
+body.lg-tv .lg-v4-rail-search::placeholder{color:#b4c9d5;opacity:1;}
+body.lg-tv .lg-v4-rail-search:focus-visible{
+  outline:3px solid #a8f7db;
+  outline-offset:2px;
+  border-color:#91ddc9;
+}
+body.lg-tv .lg-v4-row-art{
+  width:41px;height:47px;flex:0 0 41px;
+  background:#183f4a;border:1px solid #6d9daa46;
+  border-radius:8px;padding:4px;
+  display:flex;align-items:center;justify-content:center;
+}
+body.lg-tv .lg-v4-row-art img{
+  width:100%;height:100%;
+  object-fit:contain;border-radius:5px;
+}
+body.lg-tv .lg-v4-load-more{
+  width:100%;min-height:50px;
+  margin:6px 0 11px;
+  color:#b0f8e2;
+  border-radius:10px;
+  border:1px solid #63ad9a84;
+  background:#17474d;
+  padding:11px 12px;
+  font-weight:800;font-size:16px;
+}
+body.lg-tv .lg-v4-load-more:focus-visible{
+  outline:3px solid #a9ffe2;outline-offset:2px;background:#265f58;
+}
+body.lg-tv .lg-v4-rail-total{
+  text-align:center;
+  color:#9dbece;
+  font-size:13px;
+  padding:9px 4px 20px;
+  font-variant-numeric:tabular-nums;
+}
+body.lg-tv .lg-v4-third-title h2{font-size:33px;}
+body.lg-tv .lg-v4-episode-details strong{font-size:19px;}
+body.lg-tv .lg-v4-episode-details small{font-size:14px;}
+body.lg-tv .lg-v4-epg-empty,
+body.lg-tv .lg-v4-hint{font-size:16px;}
+body.lg-tv .lg-v4-no-epg{
+  margin-top:16px;
+  padding:25px 23px;
+  border:1px dashed #71b5ad69;
+  border-radius:16px;
+  background:linear-gradient(135deg,#153847b0,#102d41bd);
+  display:flex;flex-direction:column;gap:13px;
+  align-items:flex-start;
+}
+body.lg-tv .lg-v4-no-epg-icon{font-size:39px;color:#82d9cc;line-height:1;}
+body.lg-tv .lg-v4-no-epg h4{font-size:23px;color:#edfaff;}
+body.lg-tv .lg-v4-no-epg p{color:#b9d4dc;font-size:17px;line-height:1.55;}
+body.lg-tv .lg-v4-no-epg button,
+body.lg-tv .lg-v4-football-empty button{
+  min-height:47px;
+  border:1px solid #75ddbb;
+  border-radius:11px;
+  background:#235b5b;
+  color:#edfff9;
+  font-size:16px;
+  font-weight:750;
+  padding:11px 17px;
+  text-align:center;
+}
+body.lg-tv .lg-v4-no-epg button:focus-visible,
+body.lg-tv .lg-v4-football-empty button:focus-visible{
+  outline:3px solid #b8ffe5;outline-offset:2px;
+}
+body.lg-tv .lg-v4-football-empty{
+  display:flex;align-items:center;flex-wrap:wrap;
+  gap:10px 23px;
+  padding:16px 20px;
+  background:linear-gradient(105deg,#163444ab,#122b40);
+}
+body.lg-tv .lg-v4-football-empty strong{
+  color:#e3fbf5;font-size:17px;font-weight:800;
+}
+body.lg-tv .lg-v4-football-empty span{
+  flex:1 1 300px;
+  line-height:1.5;
+  font-size:15px;
+  color:#b1cbd6;
+}
+body.lg-tv .lg-v4-football-empty button{flex:0 0 auto;font-size:14px;min-height:42px;}
+body.lg-tv .lg-unclassified-link{
+  display:block;
+  width:max-content;
+  max-width:100%;
+  min-height:36px;
+  padding:8px 14px;
+  background:rgba(15,50,66,.81);
+  color:#c6e7e7;
+  border:1px solid rgba(99,186,172,.37);
+  border-radius:11px;
+  font-size:14px;
+  font-weight:650;
+  margin:11px 0 0;
+}
+body.lg-tv .lg-unclassified-link:focus-visible{
+  outline:3px solid #b7ffe4;outline-offset:2px;
+}
+body.lg-tv .lg-player-error{
+  position:absolute;
+  left:7%;right:7%;bottom:9%;
+  z-index:40;
+  pointer-events:none;
+  color:#fff3e8;
+  padding:19px 23px;
+  border:1px solid #dfa77f;
+  border-radius:12px;
+  background:rgba(62,31,25,.94);
+  font-size:19px;
+  line-height:1.4;
+  text-align:center;
+  box-shadow:0 12px 37px rgba(0,0,0,.38);
+}
+body.lg-tv .lg-home-shell .lg-home-footer{
+  margin-top:13px;
+}
+body.lg-tv.theme-light .lg-v4-rail-search{
+  background:#fff;color:#163e49;border-color:#75abb8;
+}
+body.lg-tv.theme-light .lg-v4-row-name{color:#123947;}
+body.lg-tv.theme-light .lg-v4-load-more{background:#ceede4;color:#125248;}
+body.lg-tv.theme-light .lg-v4-no-epg{background:#dbf0ee;color:#245166;}
+body.lg-tv.theme-light .lg-v4-no-epg h4{color:#18485b;}
+body.lg-tv.theme-light .lg-v4-no-epg p{color:#375e71;}
+@media(max-width:950px){
+  body.lg-tv .lg-v4-rail-head h2{font-size:24px;}
+  body.lg-tv .lg-v4-row{padding:11px 9px;min-height:54px;}
+  body.lg-tv .lg-v4-row-name{font-size:15px;}
+  body.lg-tv .lg-v4-row-art{width:34px;height:40px;flex-basis:34px;}
+  body.lg-tv .lg-v4-no-epg{padding:16px 14px;}
+}
