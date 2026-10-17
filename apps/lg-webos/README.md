@@ -47,3 +47,24 @@ npx playwright test --config playwright.lg.config.mjs
 ~~~
 
 O último comando testa a pasta gerada `dist/lg-webos`, e não o HTML compartilhado.
+
+## LG 0.2.1 — menu fixo e catálogo completo (17/10/2026)
+
+- A rolagem é confinada ao painel `main`, com menu lateral imóvel durante a navegação. O documento externo não deve rolar.
+- O limite anterior de 180 cards foi eliminado **somente na versão LG**. A lista é navegável por lotes de 48 cards; o botão **Carregar mais** e a rolagem próxima ao final carregam os lotes seguintes. A pesquisa procura na lista inteira já importada.
+- A importação M3U para LG contabiliza entradas `#EXTINF`, URLs válidas e URLs descartadas. O painel Configurações exibe os resultados quando houve importação nesta versão; playlists antigas mostram **Não disponível** para quantidades históricas desconhecidas.
+- Compatibilidade adicional com `#EXTGRP` e títulos após atributos contendo vírgulas.
+- Canais rotulados equivocadamente como "Série" podem ser identificados como **Ao Vivo** quando há marcadores fortes de emissora (`FHD/HD/SD/4K/H265` ou `tvg-id`) e não existe padrão de episódio. Itens ambíguos permanecem na classificação original.
+- A classificação das playlists antigas é corrigida durante a leitura do IndexedDB e preservada no banco, sem recadastrar URLs nem perder favoritos/posições salvas.
+
+### Limitações conhecidas
+
+- O parser lê todo o M3U recebido em memória para montar o catálogo; listas gigantes exigirão importação em fluxo e índices no armazenamento local. Não há garantia de que o provedor entregou mais itens do que o HTTP retornou.
+- O contador da interface mostra os itens efetivamente importados. Ele não confirma a quantidade anunciada externamente pelo provedor.
+- O simulador pode reproduzir menos formatos de mídia que a TV real. Estas mudanças não alteram codecs nem URLs de reprodução.
+- Os outros aplicativos do projeto não receberam mudanças visuais nem de comportamento: a correção de catálogo é condicionada à presença da classe `lg-tv` na página e está numa branch LG separada.
+
+### Teste no webOS TV 26 Simulator
+
+Abra o workflow `Build LG webOS developer IPK` da branch `feature/lg-webos-tv-ui-first-pass`, baixe o artefato `aurora-iptv-tv-lg-simulator-folder`, extraia e selecione diretamente a pasta que contém `appinfo.json`.
+Confira se o logo fica no mesmo lugar ao rolar até canais distantes. Abra `Ao Vivo` e `Séries` e verifique a classificação. Em `Configurações`, veja os totais efetivamente importados e as entradas inválidas.
