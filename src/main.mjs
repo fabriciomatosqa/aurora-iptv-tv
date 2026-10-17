@@ -10,6 +10,8 @@ import {loadCatalog,saveCatalog,loadGuide,saveGuide as saveGuideDB,deletePlaylis
 import { focusFirst, restoreFocus, nextFocus } from "./core/focus.mjs";
 import {parseLgM3U,reclassifyLgItems,auditLgCatalog} from "./core/lg-catalog.mjs";
 import {LG_LIBRARY_ROUTES, lgHomeMarkup, lgSecondaryMarkup, lgGroupKey, lgFacets} from "./core/lg-layout.mjs";
+import {lgBrowseModel,lgSeriesGroups,lgMatchSchedule} from "./core/lg-browser.mjs";
+import {lgRail,lgBrowserHeader,lgEpgMarkup,lgMovieMarkup,lgEpisodesMarkup,lgFootballHomeMarkup} from "./core/lg-browser-view.mjs";
 
 const app = document.getElementById("app");
 const playerRoot = document.getElementById("player-root");
@@ -22,6 +24,12 @@ const lgNavPages=[
   ["football","Futebol","trophy"],["settings","Configurações","settings"]
 ];
 let lgSelectedGroup="__all__", lgGroupFacets=[], lgLibraryTitle="";
+const lgBrowseState={
+  live:{platform:"",channel:""},
+  movies:{genre:"",platform:""},
+  series:{platform:"",series:""}
+};
+let lgBrowserModel=null,lgRailRows={first:[],second:[]};
 let lgPageItems=[], lgRendered=0, lgObserver=null;
 function resetLgPage() {
   lgPageItems=[];lgRendered=0;
@@ -147,8 +155,12 @@ function home() {
   const s = stats(), playlist = activePlaylist();
   if (lgTv) {
     const recentCount=state.recent.filter(it=>(!it.playlistId || it.playlistId===state.activeId) && allowed(it)).length;
-    return lgHomeMarkup({stats:s,favorites:state.favorites.length,recent:recentCount,
+    const matches=lgMatchSchedule(footballFromEpg(items().filter(i=>i.type==="live"&&allowed(i)),epgGuide()),Date.now(),4);
+    const register=item=>displayItems.push(item)-1;
+    const football=lgFootballHomeMarkup(matches,register);
+    const home=lgHomeMarkup({stats:s,favorites:state.favorites.length,recent:recentCount,
       playlistName:playlist?.name||"",hasPlaylist:Boolean(playlist),esc});
+    return home.replace('<footer class="lg-home-footer">',football+'<footer class="lg-home-footer">');
   }
   const recent = state.recent.filter(it => (!it.playlistId || it.playlistId === state.activeId) && allowed(it)).slice(0, 5);
   const total = s.live + s.movies + s.series;
@@ -247,13 +259,65 @@ function settings() {
    '<p class="muted">A prévia salva dados no armazenamento do navegador: não use credenciais privadas para testes públicos ou compartilhados.</p>' +
    '<p class="muted">20 idiomas e suporte completo a todas as APIs de TV continuam em desenvolvimento.</p></div></div>';
 }
+function lgTripleBrowser(preferredFocus="") {
+  // LG-only UI; catalogs are filtered before modelling, preserving parental policy.
+  const data=items().filter(allowed);
+  const stateForRoute=lgBrowseState[route] || {};
+  const model=lgBrowseModel(route,data,epgGuide(),stateForRoute);
+  lgBrowserModel=model;
+  if(route==="live") {
+    stateForRoute.platform=model.platform;
+    stateForRoute.channel=model.channel;
+  }else if(route==="movies"){
+    stateForRoute.genre=model.genre;
+    stateForRoute.platform=model.platform;
+  }else {
+    stateForRoute.platform=model.platform;
+    stateForRoute.series=model.series;
+  }
+  const register=item=>displayItems.push(item)-1;
+  let first=[],second=[],firstTitle="",secondTitle="",third="",firstLabel="",secondLabel="";
+  if(route==="live"){
+    firstTitle="Plataformas";secondTitle="Canais";
+    first=model.platforms;
+    second=model.channels.map(ch=>({key:ch.url,label:ch.title}));
+    firstLabel="Escolha a plataforma";secondLabel=model.platform||"Nenhuma plataforma";
+    third=lgEpgMarkup(model,register);
+  } else if(route==="movies"){
+    firstTitle="Gêneros";secondTitle="Plataformas";
+    first=model.genres;second=model.platforms;
+    firstLabel="Selecione o gênero";secondLabel=model.genre||"Escolha um gênero";
+    third=lgMovieMarkup(model,filtered=>cards(filtered));
+  } else if(route==="series"){
+    firstTitle="Plataformas";secondTitle="Séries";
+    first=model.platforms;
+    second=model.shows.map(entry=>({key:entry.key,label:entry.title,count:entry.episodes.length}));
+    firstLabel="Escolha a plataforma";secondLabel=model.platform||"Escolha uma plataforma";
+    const fav=model.selected && state.favorites.includes(itemKey(model.selected,state.activeId));
+    third=lgEpisodesMarkup(model,register,itemKey(model.selected||{},state.activeId),Boolean(fav));
+  }
+  lgRailRows={first,second};
+  app.innerHTML=lgBrowserHeader(route)+
+    '<div class="lg-v4-workspace" role="main">'+
+    lgRail({title:firstTitle,subtitle:firstLabel,items:first,selectedKey:
+      route==="movies"?model.genre:model.platform,action:"lg-filter",kind:"first",focusPrefix:"lg-first"})+
+    lgRail({title:secondTitle,subtitle:secondLabel,items:second,selectedKey:
+      route==="live"?model.channel:route==="series"?model.series:model.platform,
+      action:"lg-filter",kind:"second",focusPrefix:"lg-second"})+
+    '<main class="lg-v4-third" aria-label="'+esc(route==="live"?"Guia de programação":route==="movies"?"Filmes filtrados":"Episódios")+'">'+
+    third+'</main></div>';
+  restoreFocus(preferredFocus||"lg-first-0");
+  observeLgPages();
+}
 function render(preferredFocus = "") {
   displayItems=[];
   lgObserver?.disconnect();lgObserver=null;
   document.body.classList.toggle("theme-light",state.theme==="light");
   const homepage=lgTv && route==="home";
-  const library=lgTv && LG_LIBRARY_ROUTES.has(route);
-  app.className=lgTv?(homepage?"lg-home-mode":library?"lg-library-mode":"lg-standard-mode"):"";
+  const triple=lgTv && ["live","movies","series"].includes(route);
+  const library=lgTv && LG_LIBRARY_ROUTES.has(route) && !triple;
+  app.className=lgTv?(homepage?"lg-home-mode":triple?"lg-triple-mode":library?"lg-library-mode":"lg-standard-mode"):"";
+  if(triple){lgTripleBrowser(preferredFocus);return;}
   if(homepage){
     app.innerHTML=(notice?'<div class="notice lg-home-notice" role="status">'+esc(notice)+'</div>':"")+home();
     restoreFocus(preferredFocus || "home-live");
@@ -446,6 +510,31 @@ app.addEventListener("click",event=>{
   const target=event.target.closest("[data-action]"); if (!target) return;
   const action=target.dataset.action;
   if (pages.some(p=>p[0]===action) || action==="unknown" || (lgTv && action==="history")) navigate(action);
+  else if (lgTv && action==="lg-filter") {
+    const kind=target.dataset.kind,idx=Number(target.dataset.row);
+    const entry=lgRailRows[kind]?.[idx];
+    if(!entry || !lgBrowseState[route])return;
+    const selected=lgBrowseState[route];
+    if(route==="live"){
+      if(kind==="first"){selected.platform=entry.key;selected.channel="";}
+      else selected.channel=entry.key;
+    }else if(route==="movies"){
+      if(kind==="first"){selected.genre=entry.key;selected.platform="";}
+      else selected.platform=entry.key;
+    }else if(route==="series"){
+      if(kind==="first"){selected.platform=entry.key;selected.series="";}
+      else selected.series=entry.key;
+    }
+    resetLgPage();render(target.dataset.focus); 
+  }
+  else if (lgTv && action==="lg-series-favorite"){
+    if(lgBrowserModel?.selected){
+      const series=lgBrowserModel.selected;
+      const key=itemKey(series,state.activeId);
+      state.favorites=state.favorites.includes(key)?state.favorites.filter(k=>k!==key):[...state.favorites,key];
+      persist();render("lg-series-favorite");
+    }
+  }
   else if (lgTv && action==="lg-group") {
     lgSelectedGroup=target.dataset.lgGroup;
     const groupIndex=lgGroupFacets.findIndex(entry=>entry.key===lgSelectedGroup);
