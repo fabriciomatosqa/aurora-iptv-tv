@@ -7,6 +7,6 @@ for (const platform of ["samsung-tizen", "lg-webos"]) {
   await copyFile("index.html", dir + "/index.html");
   await cp("src", dir + "/src", { recursive:true });
   if (platform === "samsung-tizen") await copyFile("apps/samsung-tizen/config.xml", dir + "/config.xml");
-  else await copyFile("apps/lg-webos/appinfo.json", dir + "/appinfo.json");
+  else { await copyFile("apps/lg-webos/appinfo.json", dir + "/appinfo.json"); await copyFile("dist/branding/icon.png",dir+"/icon.png"); await copyFile("dist/branding/largeicon.png",dir+"/largeicon.png"); }
   console.log("Unpacked development directory:", dir);
 }
