@@ -1,42 +1,48 @@
-# AURORA IPTV TV
+# AURORA IPTV TV — Prévia 0.2.0
 
-Protótipo **0.1.0**, interface TV-first para navegadores, em desenvolvimento no ecossistema AURORA IPTV.
+Aplicativo independente de IPTV para Smart TVs; sem canais, playlists ou credenciais incluídos.
 
-## Iniciar no PC (Windows/Linux)
+## Recursos implementados na prévia
 
-```bash
-# Na raiz do projeto
-python -m http.server 8080
-# ou Linux: python3 -m http.server 8080
+- TV-first, ícones vetoriais, navegação D-pad, modo claro/escuro.
+- Múltiplas playlists M3U, troca de listas, busca, favoritos e retomada de VOD.
+- Separação conservadora de canais, filmes, séries e episódios agrupados.
+- EPG/XMLTV manual, programação atual e confrontos de futebol identificados no guia, sem resultados fictícios.
+- PIN parental com PBKDF2 e conteúdo +18 oculto até desbloqueio.
+- Uma tentativa de atualização automática de playlist por dia.
+- Projeto Android TV com player Media3 e ponte de rede; montagem de APK no GitHub Actions.
+- Pacote LG webOS de desenvolvimento via CLI oficial e preparação Samsung Tizen.
+
+## Testar no computador
+
+```sh
+git clone -b feature/tv-first-prototype https://github.com/fabriciomatosqa/aurora-iptv-tv.git
+cd aurora-iptv-tv
+python3 -m http.server 8080
 ```
 
-Abra `http://localhost:8080/`. Controle com **setas**, **Enter**, **Esc/Backspace**. Também funciona com mouse. Clique em **Testar vídeo livre** para um vídeo de demonstração CC0. Em Configurações, adicione playlist M3U fornecida legalmente por você (URL com CORS habilitado ou texto M3U colado).
+No Windows, substitua python3 por python. Depois abra http://localhost:8080. Use setas, Enter e Esc.
+Em Configurações, cole um M3U autorizado ou URL com CORS habilitado. Há um vídeo livre de teste.
 
 ## Verificações
 
-```bash
+```sh
 npm run check
 npm test
 npm run package:tv
+npm install
+npx playwright install chromium
+npm run test:ui
 ```
 
-O comando de empacotamento produz **pastas de desenvolvimento não assinadas**, em `dist/lg-webos` e `dist/samsung-tizen`, não pacotes instaláveis para Smart TV. Leia `docs/testing.md` e `docs/architecture.md` para os procedimentos e os limites.
+GitHub Actions → Build Android TV developer APK → Artifacts → aurora-iptv-tv-android-debug-apk (somente se o build tiver sucesso).
+GitHub Actions → Build LG webOS developer IPK → Artifacts → aurora-iptv-tv-lg-webos-dev-ipk (somente se o build tiver sucesso).
+Samsung exige um certificado Tizen válido para gerar WGT instalável. VIDAA depende de acesso autorizado ao SDK.
 
-## Compatibilidade planejada
+## Limites atuais
 
-| Sistema | Situação atual |
-|---|---|
-| Android TV / Google TV | Adapter nativo e Media3 ainda não implementados |
-| Samsung Tizen | Shell web não testado; AVPlay pendente |
-| LG webOS | Shell web não testado; player nativo pendente |
-| Hisense VIDAA | Dependente do acesso oficial aos SDKs e políticas de distribuição |
+Compilar não equivale a testar numa TV real. O protótipo usa localStorage (inadequado para listas gigantes ou segredos em computadores compartilhados).
+A ponte Android possui limite preliminar de 16 MB por resposta. DRM, compatibilidade de codecs, outros idiomas completos e players de Tizen/VIDAA ainda precisam ser desenvolvidos/validados.
+Ícones da versão de desenvolvimento webOS são provisórios e serão substituídos pelo branding Aurora oficial.
 
-## Recursos disponíveis nesta prévia
-
-Layout responsivo 10-foot, ícones vetoriais, navegação inicial por D-pad, parse M3U, busca, múltiplas playlists e troca de listas, séries consolidadas, favoritos e retomada básica, streaming HTML5 quando o navegador suporta. Futebol e EPG ainda não integrados. Controle parental, traduções, atualização diária e cache persistente para grandes catálogos não fazem parte desta prévia.
-
-## Privacidade
-
-**Não inclui listas IPTV, assinaturas, conteúdos comerciais ou credenciais.** A prévia utiliza `localStorage` não criptografado e de pequena capacidade: não é apropriada para armazenar credenciais privadas em PCs públicos nem playlists enormes. Os produtos finais deverão usar armazenamento seguro e pipelines de dados adequados.
-
-Documentação: `docs/architecture.md`, `docs/testing.md`, `apps/*/README.md`.
+Consulte docs/testing.md, docs/architecture.md e apps/*/README.md para as diferenças de plataforma.
