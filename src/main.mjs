@@ -188,7 +188,7 @@ function settings() {
   const selected = activePlaylist();
   const s = stats();
   const audit=selected?.importAudit;
-  const lgImportInfo=lgTv&&selected?'<div class="lg-import-audit" role="status">Playlist: <strong>'+esc(selected.name)+'</strong> · Entradas M3U encontradas: <strong>'+Number(audit?.declared ?? selected.items?.length ?? 0).toLocaleString("pt-BR")+'</strong> · Importadas: <strong>'+Number(selected.items?.length||0).toLocaleString("pt-BR")+'</strong> · URLs ignoradas: <strong>'+Number(audit?.invalid||0).toLocaleString("pt-BR")+'</strong><p class="muted">Os números correspondem ao arquivo M3U recebido, não à quantidade que o provedor anuncia externamente.</p></div>':'';
+  const lgImportInfo=lgTv&&selected?'<div class="lg-import-audit" role="status">Playlist: <strong>'+esc(selected.name)+'</strong> · Entradas M3U encontradas: <strong>'+(audit?.declared == null ? "Não disponível" : Number(audit.declared).toLocaleString("pt-BR"))+'</strong> · Importadas: <strong>'+Number(selected.items?.length||0).toLocaleString("pt-BR")+'</strong> · URLs ignoradas: <strong>'+(audit?.invalid == null ? "Não disponível" : Number(audit.invalid).toLocaleString("pt-BR"))+'</strong><p class="muted">Os números correspondem ao arquivo M3U recebido, não à quantidade que o provedor anuncia externamente.</p></div>':'';
   const lines = state.playlists.map(p => '<div class="playlist-line"><strong>' + esc(p.name) + (p.id===state.activeId ? ' ✓' : '') +
    '</strong><div class="actions"><button class="btn" data-focus="activate-' + esc(p.id) + '" data-action="activate" data-id="' + esc(p.id) + '">Usar</button>' +
    '<button class="btn warn" data-action="delete" data-id="' + esc(p.id) + '" data-focus="delete-' + esc(p.id) + '">Excluir</button></div></div>').join("");
@@ -495,7 +495,7 @@ async function hydrateCatalogs() {
       if(lgTv) {
         const corrected=reclassifyLgItems(p.items);
         if(corrected)await saveCatalog(p.id,p.items);
-        if(!p.importAudit)p.importAudit={declared:p.items.length,invalid:0};
+        if(!p.importAudit)p.importAudit={declared:null,invalid:null};
       }
       if(p.guide?.programs?.length) await saveGuideDB(p.id,p.guide);
       else p.guide=(await loadGuide(p.id))||null;
