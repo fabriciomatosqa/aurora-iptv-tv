@@ -162,7 +162,8 @@ test("LG long channel list can search channel number beyond first 120 items",asy
     "Canal "+String(i).padStart(3,"0"),"https://example.test/live/"+i+".m3u8"));
   await importM3U(page,entries);
   await page.locator('[data-focus="nav-live"]').click();
-  await expect(page.locator(".lg-v4-row").count()).resolves.toBeGreaterThan(100);
+  const initial=await page.locator(".lg-v4-rail").nth(1).locator(".lg-v4-row").count();
+  expect(initial).toBeGreaterThan(100);
   await page.locator('[data-input="lg-rail-search"][data-kind="second"]').fill("Canal 179");
   await expect(page.locator(".lg-v4-rail").nth(1).locator(".lg-v4-row")).toHaveCount(1);
   await expect(page.locator(".lg-v4-rail").nth(1)).toContainText("Canal 179");
