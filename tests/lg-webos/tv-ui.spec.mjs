@@ -14,9 +14,9 @@ async function importM3U(page,lines,name="Biblioteca de testes"){
 const entry=(group,title,url="https://example.test/stream.m3u8",id="")=>
   '#EXTINF:-1 group-title="'+group+'"'+(id?' tvg-id="'+id+'"':'')+','+title+'\n'+url;
 const fixture=[
-  entry("Globoplay","Canal Um","https://example.test/one.m3u8","one"),
-  entry("Globoplay","Canal Dois","https://example.test/two.m3u8","two"),
-  entry("Pluto TV","Canal Três","https://example.test/three.m3u8","three"),
+  entry("Canais | Globoplay","Canal Um","https://example.test/one.m3u8","one"),
+  entry("Canais | Globoplay","Canal Dois","https://example.test/two.m3u8","two"),
+  entry("Canais | Pluto TV","Canal Três","https://example.test/three.m3u8","three"),
   entry("Filmes | Ação | Netflix","Aventuras Um","https://example.test/movie1.mp4"),
   entry("Filmes | Ação | Disney+","Aventuras Dois","https://example.test/movie2.mp4"),
   entry("Filmes | Comédia | Netflix","Comédia Um","https://example.test/comedy.mp4"),
@@ -106,7 +106,7 @@ test("LG football Home shows real EPG fixtures and clicking opens channel URL",a
   await expect(page.locator(".player-screen video")).toHaveAttribute("src","https://example.test/one.m3u8");
 });
 test("LG browser rails remain fixed and have independent scrolling",async({page})=>{
-  const many=Array.from({length:100},(_,i)=>entry("Globoplay","Canal "+i,"https://example.test/"+i+".m3u8","ch"+i));
+  const many=Array.from({length:100},(_,i)=>entry("Canais | Globoplay","Canal "+i,"https://example.test/"+i+".m3u8","ch"+i));
   await importM3U(page,many);
   await page.locator('[data-focus="nav-live"]').click();
   const first=await page.locator(".lg-v4-header").evaluate(el=>el.getBoundingClientRect().top);
