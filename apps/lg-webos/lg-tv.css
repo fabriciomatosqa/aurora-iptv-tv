@@ -91,10 +91,10 @@
   align-items: center;
 }
 .lg-tv .topbar .eyebrow {
-  color: #92c8bf;
-  font-size: 13px;
-  letter-spacing: 1.7px;
+  /* Section title already appears as the main, readable heading. */
+  display: none;
 }
+.lg-tv .topbar { justify-content: flex-end; }
 .lg-tv .topbar .topright {
   color: #adcbd1;
   font-size: 14px;
