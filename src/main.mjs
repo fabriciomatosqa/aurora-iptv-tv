@@ -4,6 +4,7 @@ import { parseXMLTV, currentAndNext, footballFromEpg } from "./core/epg.mjs";
 import { loadRemoteText, hasNativePlayer, startNative } from "./core/native.mjs";
 import {isRestricted,createPin,verifyPin} from "./core/parental.mjs";
 import {needsDailyUpdate,localDay,mergePlaylist} from "./core/updates.mjs";
+import {remoteKey,registerRemoteKeys} from "./core/remote.mjs";
 import { focusFirst, restoreFocus, nextFocus } from "./core/focus.mjs";
 
 const app = document.getElementById("app");
@@ -45,7 +46,7 @@ function persist() { if (!saveState(state)) notice = "O armazenamento local est�
 function navigate(next) { if (next === route) return; history.push(route); route = next; search = ""; render(); }
 function goBack() { if (currentPlay) { closePlayer(); return; } if (history.length) { route = history.pop(); search = ""; render(); } else if (route !== "home") { route = "home"; render(); } }
 function pageShell(label) {
-  return '<div class="topbar"><div class="eyebrow">' + esc(label) + '</div><div class="topright">AURORA IPTV TV · PRÉVIA 0.1.0</div></div>';
+  return '<div class="topbar"><div class="eyebrow">' + esc(label) + '</div><div class="topright">AURORA IPTV TV · PRÉVIA 0.2.0</div></div>';
 }
 function empty(title, description, action = "") {
   return '<div class="empty"><h3>' + esc(title) + '</h3><p>' + esc(description) + '</p>' +
@@ -360,16 +361,25 @@ playerRoot.addEventListener("click",event=>{
 playerRoot.addEventListener("pointermove",scheduleHideControls);
 document.addEventListener("keydown",event=>{
   const field=["INPUT","TEXTAREA","SELECT"].includes(document.activeElement?.tagName);
-  if(event.key==="Escape" || (event.key==="Backspace"&&!field)) {event.preventDefault();goBack();return;}
+  const key=remoteKey(event);
+  if(key==="Escape" || (key==="Backspace"&&!field)) {event.preventDefault();goBack();return;}
   if(currentPlay){
     scheduleHideControls();
-    if(["ArrowUp","ArrowDown","ArrowLeft","ArrowRight"].includes(event.key) && !field) { event.preventDefault(); nextFocus(event.key, playerRoot); return; }
-    if(event.key===" " && !field){event.preventDefault();const vid=playerRoot.querySelector("video");if(vid)vid.paused?vid.play().catch(()=>{}):vid.pause();}
-    if(event.key==="Enter" && document.activeElement?.tagName!=="BUTTON")playerRoot.querySelector('[data-action="close-player"]')?.focus();
+    const vid=playerRoot.querySelector("video");
+    if(["ArrowUp","ArrowDown","ArrowLeft","ArrowRight"].includes(key) && !field) {
+      event.preventDefault();nextFocus(key,playerRoot);return;
+    }
+    if(key==="PlayPause" && !field){
+      event.preventDefault();if(vid)vid.paused?vid.play().catch(()=>{}):vid.pause();
+    }
+    if(key==="FastForward" && vid && Number.isFinite(vid.duration)) {event.preventDefault();vid.currentTime=Math.min(vid.duration,vid.currentTime+15);}
+    if(key==="Rewind" && vid && Number.isFinite(vid.duration)) {event.preventDefault();vid.currentTime=Math.max(0,vid.currentTime-15);}
     return;
   }
-  if(!field && ["ArrowUp","ArrowDown","ArrowLeft","ArrowRight"].includes(event.key)) {event.preventDefault();nextFocus(event.key);}
+  if(!field && ["ArrowUp","ArrowDown","ArrowLeft","ArrowRight"].includes(key)){event.preventDefault();nextFocus(key);}
 });
+registerRemoteKeys();
+
 window.auroraGoBack=goBack;
 window.auroraNativePlaybackEnded=(key,seconds,ended)=>{
   if(ended)delete state.positions[key];
