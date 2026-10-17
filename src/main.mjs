@@ -27,7 +27,7 @@ function esc(v) { return String(v ?? "").replace(/[&<>"']/g, c => ({ "&":"&amp;"
 function safeMedia(v) { try { const u = new URL(v); return ["http:", "https:"].includes(u.protocol) ? u.href : ""; } catch { return ""; } }
 const testItem = { title: "Vídeo livre de demonstração (CC0)", group: "Demonstração", type: "movies", logo: "", url: "https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4" };
 let route = "home", history = [], search = "", currentSeries = null, currentPlay = null;
-let displayItems = [], notice = "", lastPositionUpdate = -1, hideTimer = null;
+let displayItems = [], notice = "", lastPositionUpdate = -1, hideTimer = null, returnFocusKey = "";
 function activePlaylist() { return state.playlists.find(p => p.id === state.activeId) || null; }
 function items() { return activePlaylist()?.items || []; }
 function stats() {
@@ -147,6 +147,7 @@ function favorite(item) {
 function startPlayer(item) {
   const url = safeMedia(item.url);
   if (!url) { notice = "Não há URL de reprodução HTTP(S) válida."; render(); return; }
+  returnFocusKey = document.activeElement?.dataset.focus || "";
   currentPlay = item;
   state.recent = [{ ...item, playlistId: state.activeId }, ...state.recent.filter(r => r.url !== item.url)].slice(0,15);
   persist();
@@ -155,7 +156,7 @@ function startPlayer(item) {
    '<div><h3>' + esc(item.title) + '</h3><p>Retomada disponível quando o formato permite</p></div>' +
    '<div class="actions"><button class="btn" data-action="player-favorite" data-focus="player-favorite">' + icon("star") + (liked?" Favoritado":" Favoritar") + '</button>' +
    '<button class="btn" data-action="close-player" data-focus="close-player">' + icon("back") + ' Voltar</button></div></div>' +
-   '<video controls playsinline autoplay src="' + esc(url) + '"></video><div class="player-help">Esc ou Voltar para sair · Espaço para pausar</div></div>';
+   '<video controls playsinline autoplay tabindex="0" data-focus="video" src="' + esc(url) + '"></video><div class="player-help">Esc ou Voltar para sair · Espaço para pausar</div></div>';
   const vid = playerRoot.querySelector("video");
   const key = itemKey(item,state.activeId);
   vid.addEventListener("loadedmetadata",()=>{ const pos=state.positions[key]||0; if (Number.isFinite(vid.duration) && pos < vid.duration-15) vid.currentTime=pos; });
@@ -166,7 +167,7 @@ function startPlayer(item) {
   vid.addEventListener("ended",()=>{delete state.positions[key];persist();});
   vid.addEventListener("error",()=>{notice="O dispositivo/navegador não conseguiu reproduzir esta mídia. Confira o formato, acesso e codecs.";});
   vid.play().catch(()=>{ /* Browser may require explicit playback gesture. */ });
-  playerRoot.querySelector('[data-action="close-player"]').focus();
+  vid.focus();
   scheduleHideControls();
 }
 function scheduleHideControls() {
@@ -174,7 +175,7 @@ function scheduleHideControls() {
   const screen=playerRoot.querySelector(".player-screen");
   if (!screen) return;
   screen.classList.remove("player-idle");
-  hideTimer=setTimeout(()=>screen.classList.add("player-idle"),4500);
+  hideTimer=setTimeout(()=>{ if (screen.querySelector(".player-header")?.contains(document.activeElement)) screen.querySelector("video")?.focus(); screen.classList.add("player-idle"); },4500);
 }
 function closePlayer() {
   if (!currentPlay) return;
@@ -184,7 +185,8 @@ function closePlayer() {
   }
   vid?.pause(); if (vid) vid.removeAttribute("src");
   clearTimeout(hideTimer); playerRoot.innerHTML=""; currentPlay=null; lastPositionUpdate=-1;
-  render();
+  render(returnFocusKey);
+  returnFocusKey = "";
 }
 async function savePlaylist(form) {
   const data = new FormData(form);
@@ -266,6 +268,7 @@ document.addEventListener("keydown",event=>{
   if(event.key==="Escape" || (event.key==="Backspace"&&!field)) {event.preventDefault();goBack();return;}
   if(currentPlay){
     scheduleHideControls();
+    if(["ArrowUp","ArrowDown","ArrowLeft","ArrowRight"].includes(event.key) && !field) { event.preventDefault(); nextFocus(event.key, playerRoot); return; }
     if(event.key===" " && !field){event.preventDefault();const vid=playerRoot.querySelector("video");if(vid)vid.paused?vid.play().catch(()=>{}):vid.pause();}
     if(event.key==="Enter" && document.activeElement?.tagName!=="BUTTON")playerRoot.querySelector('[data-action="close-player"]')?.focus();
     return;
