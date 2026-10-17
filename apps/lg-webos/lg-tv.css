@@ -339,3 +339,91 @@
   .lg-tv .topbar .topright { display: none; }
   .lg-tv .hero { padding: 24px; }
 }
+
+
+/* 0.2.1 LG — rigid sidebar, independent catalogue scrolling.
+ * Sticky was unreliable in the webOS Simulator when the entire body scrolled.
+ * A single scrollable main region preserves side navigation and focus.
+ */
+html:has(body.lg-tv), body.lg-tv { height:100%; max-height:100%; overflow:hidden !important; }
+body.lg-tv #app {
+  height:100vh;
+  max-height:100vh;
+  min-height:0;
+  overflow:hidden;
+  grid-template-rows:minmax(0,1fr);
+}
+body.lg-tv .sidebar {
+  position:relative !important;
+  top:auto !important;
+  height:100vh !important;
+  min-height:0;
+  max-height:100vh;
+  overflow:hidden;
+  overscroll-behavior:contain;
+  z-index:5;
+}
+body.lg-tv main {
+  height:100vh !important;
+  max-height:100vh;
+  min-height:0;
+  overflow-x:hidden;
+  overflow-y:auto;
+  overscroll-behavior:contain;
+  -webkit-overflow-scrolling:touch;
+  scroll-behavior:auto;
+}
+body.lg-tv .nav { flex:0 0 auto; }
+body.lg-tv .sidebar-bottom { flex:0 0 auto; }
+body.lg-tv .lg-paging-info {
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:20px;
+  margin:26px 0 10px;
+  padding:17px 20px;
+  border:1px solid rgba(112,191,181,.28);
+  border-radius:13px;
+  background:rgba(19,56,61,.55);
+  font-size:17px;
+  color:#cfe8ee;
+}
+body.lg-tv .lg-paging-info strong { color:#87f6d5; font-variant-numeric:tabular-nums; }
+body.lg-tv .lg-paging-info button {
+  border-radius:11px;
+  background:#193e47;
+  color:#e8fff6;
+  border:1px solid #70bbab;
+  padding:14px 19px;
+  font-size:18px;
+  font-weight:700;
+  min-height:52px;
+}
+body.lg-tv .lg-paging-info button:hover,
+body.lg-tv .lg-paging-info button:focus-visible { background:#2d6c5c; }
+body.lg-tv .lg-paging-info button[hidden] { display:none; }
+body.lg-tv .lg-import-audit {
+  margin:14px 0 22px;
+  padding:16px 19px;
+  border-radius:12px;
+  border:1px solid rgba(108, 184, 188, .28);
+  background:rgba(19, 48, 63, .7);
+  font-size:16px;
+  color:#c6e6ed;
+  line-height:1.5;
+}
+body.lg-tv .lg-import-audit strong { color:#91f4cf; }
+body.lg-tv.theme-light .lg-paging-info,
+body.lg-tv.theme-light .lg-import-audit {
+  background:#dcefea;
+  color:#214c5a;
+}
+body.lg-tv.theme-light .lg-paging-info strong { color:#0d7668; }
+body.lg-tv.theme-light .lg-paging-info button {
+  background:#e5f5f0;
+  border-color:#4d9b8b;
+  color:#164b46;
+}
+@media(max-width:860px) {
+  body.lg-tv .lg-paging-info { flex-direction:column; align-items:stretch; }
+}
