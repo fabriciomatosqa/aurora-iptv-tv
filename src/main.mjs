@@ -9,12 +9,19 @@ import {hasTizenPlayer,startTizenPlayer,tizenPositionSeconds,toggleTizenPlayback
 import {loadCatalog,saveCatalog,loadGuide,saveGuide as saveGuideDB,deletePlaylistData} from "./core/catalog-db.mjs";
 import { focusFirst, restoreFocus, nextFocus } from "./core/focus.mjs";
 import {parseLgM3U,reclassifyLgItems,auditLgCatalog} from "./core/lg-catalog.mjs";
+import {LG_LIBRARY_ROUTES, lgHomeMarkup, lgSecondaryMarkup, lgGroupKey, lgFacets} from "./core/lg-layout.mjs";
 
 const app = document.getElementById("app");
 const playerRoot = document.getElementById("player-root");
 const state = loadState();
 const lgTv = document.body.classList.contains("lg-tv");
 const LG_PAGE_SIZE=48;
+const lgNavPages=[
+  ["home","Início","home"],["live","Ao Vivo","tv"],["movies","Filmes","film"],
+  ["series","Séries","layers"],["favorites","Favoritos","star"],["history","Histórico","history"],
+  ["football","Futebol","trophy"],["settings","Configurações","settings"]
+];
+let lgSelectedGroup="__all__", lgGroupFacets=[], lgLibraryTitle="";
 let lgPageItems=[], lgRendered=0, lgObserver=null;
 function resetLgPage() {
   lgPageItems=[];lgRendered=0;
@@ -39,7 +46,8 @@ const paths = {
   settings: '<circle cx="12" cy="12" r="3"/><path d="M19 13.5l2-1.5-2-1.5-.8-2 1-2.4-2.1-2.1-2.4 1-2-.8L12 2l-1.5 2-2 .8-2.4-1L4 6l1 2.4-.8 2L2 12l2 1.5.8 2-1 2.4L6 20l2.4-1 2 .8L12 22l1.5-2.2 2-.8 2.4 1 2.1-2.1-1-2.4z"/>',
   play: '<path d="m8 5 11 7-11 7z"/>',
   plus: '<path d="M12 5v14M5 12h14"/>',
-  back: '<path d="m15 18-6-6 6-6"/>'
+  back: '<path d="m15 18-6-6 6-6"/>',
+  history: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l4 3M3 8V4h4"/>'
 };
 function icon(name) { return '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + (paths[name] || paths.play) + "</svg>"; }
 function esc(v) { return String(v ?? "").replace(/[&<>"']/g, c => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;" })[c]); }
@@ -57,7 +65,7 @@ function stats() {
     series: groupSeries(all).length, unknown: all.filter(i=>i.type==="unknown").length };
 }
 function persist() { if (!saveState(state)) notice = "O armazenamento local está cheio. Nesta versão de teste use listas menores."; }
-function navigate(next) { if (next === route) return; history.push(route); route = next; search = ""; resetLgPage();render();lgScrollMainTop(); }
+function navigate(next) { if (next === route) return; history.push(route); if(lgTv && next!=="details")lgSelectedGroup="__all__"; route = next; search = ""; resetLgPage();render();lgScrollMainTop(); }
 function goBack() { if (currentPlay) { closePlayer(); return; } if (history.length) { route = history.pop(); search = ""; resetLgPage();render();lgScrollMainTop(); } else if (route !== "home") { route = "home"; resetLgPage();render();lgScrollMainTop(); } }
 function pageShell(label) {
   return '<div class="topbar"><div class="eyebrow">' + esc(label) + '</div><div class="topright">AURORA IPTV TV · PRÉVIA 0.2.0</div></div>';
@@ -137,6 +145,11 @@ function guideRows(channels) {
 }
 function home() {
   const s = stats(), playlist = activePlaylist();
+  if (lgTv) {
+    const recentCount=state.recent.filter(it=>(!it.playlistId || it.playlistId===state.activeId) && allowed(it)).length;
+    return lgHomeMarkup({stats:s,favorites:state.favorites.length,recent:recentCount,
+      playlistName:playlist?.name||"",hasPlaylist:Boolean(playlist),esc});
+  }
   const recent = state.recent.filter(it => (!it.playlistId || it.playlistId === state.activeId) && allowed(it)).slice(0, 5);
   const total = s.live + s.movies + s.series;
   return pageShell("Seu entretenimento, sua escolha") +
@@ -156,7 +169,16 @@ function catalogue(type, title) {
   let content = type === "series" ? groupSeries(items()) : items().filter(i=>i.type===type);
   if (type === "favorites") content = [...items().filter(i=>state.favorites.includes(itemKey(i,state.activeId)) && i.type!=="series"), ...groupSeries(items()).filter(i=>state.favorites.includes(itemKey(i,state.activeId)))];
   if (type === "unknown") content = items().filter(i=>i.type==="unknown");
+  if (lgTv && type==="history") content=state.recent.filter(it=>(!it.playlistId || it.playlistId===state.activeId));
   content=content.filter(allowed);
+  if (lgTv) {
+    // Facets are derived from every accessible item, before applying the selected group
+    // and search. This prevents the secondary list from disappearing while searching.
+    lgLibraryTitle=title;
+    lgGroupFacets=lgFacets(content);
+    if(!lgGroupFacets.some(entry=>entry.key===lgSelectedGroup))lgSelectedGroup="__all__";
+    if(lgSelectedGroup!=="__all__")content=content.filter(it=>lgGroupKey(it)===lgSelectedGroup);
+  }
   if (search.trim()) content = content.filter(it => it.title.toLocaleLowerCase("pt-BR").includes(search.trim().toLocaleLowerCase("pt-BR")));
   return pageShell(title) + '<h2>' + esc(title) + '</h2><p class="subtitle">' + content.length.toLocaleString("pt-BR") + ' itens encontrados nesta seção</p>' +
    '<div class="searchbar"><input class="search" type="search" data-focus="search" data-input="search" placeholder="Buscar por nome..." value="' + esc(search) + '" aria-label="Buscar"></div>' +
@@ -226,19 +248,32 @@ function settings() {
    '<p class="muted">20 idiomas e suporte completo a todas as APIs de TV continuam em desenvolvimento.</p></div></div>';
 }
 function render(preferredFocus = "") {
-  displayItems = [];
+  displayItems=[];
   lgObserver?.disconnect();lgObserver=null;
-  document.body.classList.toggle("theme-light", state.theme === "light");
-  const nav = pages.map(([id,label,ico]) => '<button data-action="' + id + '" data-focus="nav-' + id + '" class="' + (route===id || (route==="details" && id==="series") ? "active" : "") +
-   '" aria-current="' + (route===id?"page":"false") + '">' + icon(ico) + '<span>' + esc(label) + '</span></button>').join("");
+  document.body.classList.toggle("theme-light",state.theme==="light");
+  const homepage=lgTv && route==="home";
+  const library=lgTv && LG_LIBRARY_ROUTES.has(route);
+  app.className=lgTv?(homepage?"lg-home-mode":library?"lg-library-mode":"lg-standard-mode"):"";
+  if(homepage){
+    app.innerHTML=(notice?'<div class="notice lg-home-notice" role="status">'+esc(notice)+'</div>':"")+home();
+    restoreFocus(preferredFocus || "home-live");
+    return;
+  }
+  const navPages=lgTv?lgNavPages:pages;
+  const nav=navPages.map(([id,label,ico])=>'<button data-action="'+id+'" data-focus="nav-'+id+'" class="'+
+    (route===id || (route==="details" && id==="series")?"active":"")+
+    '" aria-current="'+(route===id?"page":"false")+'">'+icon(ico)+'<span>'+esc(label)+'</span></button>').join("");
   let page = route==="home" ? home() : route==="live" ? catalogue("live","Ao Vivo") :
-   route==="movies" ? catalogue("movies","Filmes") : route==="series" ? catalogue("series","Séries") :
-   route==="football" ? football() : route==="favorites" ? catalogue("favorites","Favoritos") :
-   route==="settings" ? settings() : route==="unknown" ? catalogue("unknown","Sem classificação") : seriesDetails();
-  app.innerHTML = '<aside class="sidebar" aria-label="Menu principal"><div class="logo"><div class="logo-mark" aria-hidden="true"></div><div><div class="logo-name">AURORA</div><span class="logo-sub">IPTV TV</span></div></div><nav class="nav">' +
-   nav + '</nav><div class="sidebar-bottom">VERSÃO DE DESENVOLVIMENTO<br>Controle remoto: ← ↑ → ↓ · OK · Voltar</div></aside><main role="main">' +
-   (notice ? '<div class="notice" role="status">' + esc(notice) + '</div>' : "") + page + '</main>';
-  restoreFocus(preferredFocus || "nav-" + (route==="details"?"series":route));
+    route==="movies" ? catalogue("movies","Filmes") : route==="series" ? catalogue("series","Séries") :
+    route==="football" ? football() : route==="favorites" ? catalogue("favorites","Favoritos") :
+    route==="history" && lgTv ? catalogue("history","Histórico") :
+    route==="settings" ? settings() : route==="unknown" ? catalogue("unknown","Sem classificação") : seriesDetails();
+  const secondary=library?lgSecondaryMarkup({heading:lgLibraryTitle,facets:lgGroupFacets,selected:lgSelectedGroup,esc}):"";
+  app.innerHTML='<aside class="sidebar" aria-label="Menu principal"><div class="logo"><div class="logo-mark" aria-hidden="true"></div><div><div class="logo-name">AURORA</div><span class="logo-sub">IPTV TV</span></div></div><nav class="nav">'+
+    nav+'</nav><div class="sidebar-bottom">VERSÃO DE DESENVOLVIMENTO<br>Controle remoto: ← ↑ → ↓ · OK · Voltar</div></aside>'+
+    secondary+'<main role="main">'+
+    (notice?'<div class="notice" role="status">'+esc(notice)+'</div>':"")+page+'</main>';
+  restoreFocus(preferredFocus || "nav-"+(route==="details"?"series":route));
   observeLgPages();
 }
 function openItem(item) {
@@ -410,7 +445,13 @@ async function handlePin(form) {
 app.addEventListener("click",event=>{
   const target=event.target.closest("[data-action]"); if (!target) return;
   const action=target.dataset.action;
-  if (pages.some(p=>p[0]===action) || action==="unknown") navigate(action);
+  if (pages.some(p=>p[0]===action) || action==="unknown" || (lgTv && action==="history")) navigate(action);
+  else if (lgTv && action==="lg-group") {
+    lgSelectedGroup=target.dataset.lgGroup;
+    const groupIndex=lgGroupFacets.findIndex(entry=>entry.key===lgSelectedGroup);
+    search="";
+    resetLgPage();render("lg-group-"+Math.max(0,groupIndex));lgScrollMainTop();
+  }
   else if (action==="lg-more") appendLgPage();
   else if (action==="item") openItem(displayItems[Number(target.dataset.index)]);
   else if (action==="test") startPlayer(testItem);
