@@ -20,6 +20,7 @@ const state = loadState();
 const lgTv = document.body.classList.contains("lg-tv");
 const androidTv = !lgTv && hasAndroidCatalog();
 const androidSummaries=new Map(),androidHome=new Map(),androidUpdating=new Set();
+const androidGuidesPending=new Set();
 let androidView={key:"",items:[],more:false},androidOffset=0,androidGroup="",androidGroupOffset=0,androidGroups=[];
 let androidGuideToken=0,androidActivation=0,androidMatches=[],androidSeasons=[],androidSeason="";
 let androidSearchTimer=null;
@@ -171,7 +172,11 @@ function guideRows(channels) {
   return rows ? '<section><h2>Programação de canais</h2><div class="saved-list">'+rows+'</div></section>' : "";
 }
 function androidRequestKey(){return JSON.stringify([state.activeId,route,search,androidOffset,androidGroup,androidGroupOffset,androidSeason,
-  currentSeries?.showKey,Boolean(state.parental)&&parentUnlocked,state.favorites,androidGuideToken]);}
+  currentSeries?.showKey,Boolean(state.parental)&&parentUnlocked,state.favorites,route==="football"?androidGuideToken:0]);}
+function androidPagePainted(playlist){
+  if(!androidGuidesPending.has(playlist))return;androidGuidesPending.delete(playlist);
+  requestAnimationFrame(()=>requestAnimationFrame(()=>{if(state.activeId===playlist)void loadAndroidGuide(activePlaylist());}));
+}
 function ensureAndroidView(){
   if(!androidTv)return;
   if(!activePlaylist()){androidView={key:"",items:[],more:false};androidMatches=[];return;}
@@ -220,6 +225,7 @@ function ensureAndroidView(){
     if(result.groups)androidGroups=result.groups;if(result.seasons)androidSeasons=result.seasons;
     if(result.matches)androidMatches=result.matches;
     render(document.activeElement?.dataset.focus||"");
+    androidPagePainted(playlist);
   }).catch(()=>{if(androidView.key!==key)return;androidView.loading=false;notice="Não foi possível ler esta página. Seus dados foram preservados.";render();});
 }
 function ensureAndroidLegacyView(){
@@ -248,6 +254,7 @@ function ensureAndroidLegacyView(){
     androidView={key,items:rows.slice(0,48),more:rows.length>48,loading:false};
     if(selectedRoute==="home")androidHome.set(legacy.id,androidView.items);
     render(document.activeElement?.dataset.focus||"");
+    androidPagePainted(legacy.id);
   })();
 }
 function androidCatalogue(type,title,details=false){
@@ -326,6 +333,7 @@ function catalogue(type, title) {
 }
 function seriesDetails() {
   if (!currentSeries) return empty("Série não encontrada", "Volte ao catálogo.");
+  if (androidTv && !allowed(currentSeries)) return empty("Conteúdo restrito", "Desbloqueie o controle parental em Configurações.");
   if(androidTv && currentSeries.showKey)return androidCatalogue("series",currentSeries.title,true);
   return pageShell("Séries / Episódios") +
    '<div class="actions" style="margin-bottom:18px"><button class="btn" data-action="back" data-focus="back">' + icon("back") + ' Voltar</button>' +
@@ -335,7 +343,7 @@ function seriesDetails() {
    '<section><h2>Episódios disponíveis</h2>' + cards(currentSeries.episodes) + '</section>';
 }
 function football() {
-  const matches=androidTv?androidMatches:footballFromEpg(items().filter(allowed), epgGuide());
+  const matches=androidTv?androidMatches.filter(match=>allowed(match.channel)):footballFromEpg(items().filter(allowed), epgGuide());
   const rows=matches.slice(0,100).map(match=>{
     const index=displayItems.push(match.channel)-1;
     const now=Date.now(),p=match.program;
@@ -862,6 +870,7 @@ async function activateAndroidPlaylist(){
       if(token!==androidActivation || state.activeId!==playlist.id)return;
       if(legacy?.length){
         androidLegacy={id:playlist.id,items:legacy};
+        androidGuidesPending.add(playlist.id);
         notice="Preparando o catálogo salvo para leitura por páginas. Canais e filmes antigos continuam acessíveis.";render();
         await migrateAndroidCatalog(playlist,legacy);
         summary=await androidCatalog("summary",{playlist:playlist.id});
@@ -876,9 +885,9 @@ async function activateAndroidPlaylist(){
     }
     persist();
     if(token!==androidActivation || state.activeId!==playlist.id)return;
-    notice="";render();
+    notice="";androidGuidesPending.add(playlist.id);render();
     // Guide and inactive libraries do not delay the first committed page.
-    setTimeout(()=>{if(state.activeId===playlist.id)void loadAndroidGuide(playlist);},0);
+    if(route==="settings")androidPagePainted(playlist.id);
     if(needsDailyUpdate(playlist))setTimeout(()=>{if(state.activeId===playlist.id)void refreshActive({quiet:true,playlist});},1200);
   }catch{
     if(token!==androidActivation)return;

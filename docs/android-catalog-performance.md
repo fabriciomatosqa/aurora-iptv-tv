@@ -37,7 +37,7 @@ essa capacidade usa o novo caminho. Navegador, webOS e Tizen mantêm seus caminh
 - Transação única não exclusiva: os leitores continuam vendo o catálogo anterior
   até o commit; contagens, grupos e séries mudam na mesma transação. Grupos/séries
   afetados são atualizados; itens que desapareceram da resposta são preservados.
-- Guia local posterior à primeira página, playlists inativas somente ao selecionar.
+- Guia local agendado depois de pintar a primeira página, playlists inativas somente ao selecionar.
   Futebol consulta os canais correspondentes ao guia por índices e lotes limitados,
   preservando correspondência exata e a prioridade de tvg-id.
 

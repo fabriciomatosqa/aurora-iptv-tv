@@ -134,6 +134,10 @@ final class CatalogStore extends SQLiteOpenHelper {
             try{previous=find.simpleQueryForString();}catch(SQLiteDoneException ignored){}
             if(type.equals("series")){
                 String identity=CatalogParser.seriesTitle(row.getString("title"));
+                row.put("catalogSeriesTitle",identity);
+                // Most rows retain their original title. Compare their canonical
+                // representation before decoding the old JSON just to recover identity.
+                if(!previous.isEmpty() && previous.equals(row.toString()))return;
                 if(!previous.isEmpty()){
                     JSONObject old=new JSONObject(previous);
                     if(old.optString("type").equals("series"))identity=old.optString("catalogSeriesTitle",CatalogParser.seriesTitle(old.getString("title")));

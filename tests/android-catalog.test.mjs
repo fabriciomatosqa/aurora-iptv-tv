@@ -1,6 +1,6 @@
 import {test} from "node:test";
 import assert from "node:assert/strict";
-import {saveState,loadState} from "../src/core/storage.mjs";
+import {saveState,loadState,itemKey} from "../src/core/storage.mjs";
 
 test("inactive inline legacy data survives persistence until its durable migration commits",()=>{
   let saved="";globalThis.localStorage={setItem(_key,value){saved=value;},getItem(){return saved;}};
@@ -10,6 +10,12 @@ test("inactive inline legacy data survives persistence until its durable migrati
   assert.deepEqual(restored.favorites,state.favorites);assert.deepEqual(restored.positions,state.positions);
   state.playlists[1].legacyItemsPending=false;state.playlists[1].legacyGuidePending=false;saveState(state);
   assert.equal(loadState().playlists[1].items,undefined);assert.equal(loadState().playlists[1].guide,undefined);
+});
+test("native series favorite identity survives its displayed title changing",()=>{
+  const original=itemKey({type:"series",title:"Aurora"},"one");
+  const renamed=itemKey({type:"series",title:"Aurora Revisada",favoriteSeriesTitle:"Aurora"},"one");
+  assert.equal(renamed,original);
+  assert.equal(itemKey({type:"movies",title:"Renamed",url:"https://example.test/movie"},"one"),"one|https://example.test/movie");
 });
 test("Android bridge matches asynchronous readers and serializes whole legacy migrations before refresh",async()=>{
   const calls=[];let release;
