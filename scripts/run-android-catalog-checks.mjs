@@ -10,7 +10,15 @@ function adb(args,timeout=30000){
   return result.stdout;
 }
 const component=pkg+".test/androidx.test.runner.AndroidJUnitRunner";
+// Gradle's connected-test cleanup removes both packages and their private evidence.
+// Install and run the complete instrumentation suite directly, retaining that same
+// emulator installation for the opt-in matrix and actual process restart below.
+adb(["install","-r","apps/android-tv/app/build/outputs/apk/debug/app-debug.apk"],120000);
+adb(["install","-r","apps/android-tv/app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk"],120000);
 try{
+  const smoke=adb(["shell","am","instrument","-w",component],10*60*1000);
+  writeFileSync(out+"/instrumentation-suite.txt",smoke);console.log(smoke);
+  if(!/OK \(\d+ tests?\)/.test(smoke)||/FAILURES!!!|INSTRUMENTATION_FAILED/.test(smoke))throw Error("Android TV instrumentation suite failed");
   const result=adb(["shell","am","instrument","-w","-e","class",pkg+".CatalogPerformanceTest#measureMatrix","-e","catalogBenchmark","true","-e","catalogLeaveFixture","true","-e","catalogSizes","10000,100000,300000,600000,1200000",component],3*60*60*1000);
   writeFileSync(out+"/instrumentation.txt",result);console.log(result);
   if(!result.includes("OK (1 test)"))throw Error("Android TV benchmark failed");

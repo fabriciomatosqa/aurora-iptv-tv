@@ -64,7 +64,7 @@ jobs:
             timeout 120 adb wait-for-device
             adb shell getprop ro.build.version.sdk
             adb shell getprop ro.build.characteristics
-            gradle -p apps/android-tv :app:connectedDebugAndroidTest --no-daemon
+            gradle -p apps/android-tv :app:assembleDebugAndroidTest --no-daemon
             node scripts/run-android-catalog-checks.mjs
       - uses: actions/upload-artifact@v4
         if: always()
