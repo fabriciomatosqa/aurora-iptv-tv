@@ -45,7 +45,7 @@ public class CatalogUiTest {
                 ui.click("[data-focus=nav-series]");ui.waitFor("document.querySelectorAll('.card').length===1 && document.querySelector('.card-title')?.textContent==='Aurora'",15000);
                 ui.click(".card");ui.waitFor("document.querySelectorAll('.card').length===48 && document.querySelector('[data-input=android-season]')",15000);
                 assertEquals("true",ui.js("JSON.parse(localStorage.getItem('aurora-tv-preview-v1')).positions["+JSONObject.quote(key)+"]===45"));
-                ui.js("setTimeout(()=>location.reload(),0);true");ui.waitFor("document.querySelectorAll('.stat').length===4 && document.querySelectorAll('.card').length>0",30000);
+                ui.reload();ui.waitFor("document.querySelectorAll('.stat').length===4 && document.querySelectorAll('.card').length>0",30000);
                 ui.click("[data-focus=nav-favorites]");ui.waitFor("document.querySelectorAll('.card').length===1 && document.querySelector('.card-title')?.textContent==='Movie 5'",15000);
                 UiDevice.getInstance(InstrumentationRegistry.getInstrumentation()).takeScreenshot(new File(context.getFilesDir(),"tv-paged-catalog.png"));
             }finally{ui.restore();}

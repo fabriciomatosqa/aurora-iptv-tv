@@ -53,12 +53,17 @@ jobs:
           api-level: 34
           target: android-tv
           arch: x86
+          profile: tv_720p
           ram-size: 3072M
           disk-size: 8192M
           heap-size: 512M
-          emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim -camera-back none
+          emulator-options: -no-window -gpu swiftshader_indirect -feature -Vulkan -no-snapshot -noaudio -no-boot-anim -camera-back none
           disable-animations: true
           script: |
+            adb reconnect offline
+            timeout 120 adb wait-for-device
+            adb shell getprop ro.build.version.sdk
+            adb shell getprop ro.build.characteristics
             gradle -p apps/android-tv :app:connectedDebugAndroidTest --no-daemon
             node scripts/run-android-catalog-checks.mjs
       - uses: actions/upload-artifact@v4

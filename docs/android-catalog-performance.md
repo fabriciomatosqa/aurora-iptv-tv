@@ -45,6 +45,8 @@ Não se inferem identidades por título. URLs e chaves de favoritos/progresso/hi
 mantêm o contrato anterior da TV. Portanto uma URL inteiramente diferente ainda é
 um item diferente, mesmo quando o título coincide. O diretório mantém a distinção
 entre títulos acentuados que o agrupamento anterior tratava como distintos.
+Em URLs já conhecidas, uma mudança de título de episódio conserva a identidade
+original da série e a chave de favorito, mesmo quando o nome apresentado muda.
 Uma série com episódios restritos continua bloqueada como conjunto.
 
 ## Migração e dados antigos

@@ -45,6 +45,8 @@ public class CatalogStoreTest {
         store.getWritableDatabase().execSQL("DROP TRIGGER reject_update");store.getWritableDatabase().execSQL("DROP TRIGGER reject_insert");
         JSONObject result=store.importReader("test",new StringReader(rows(15).replace("Aurora S01E01","Aurora Revisada S01E01")),"https://example.test/list");
         assertEquals(0,result.getInt("added"));assertEquals(1,result.getInt("changed"));assertEquals(15,result.getInt("total"));
+        JSONObject favorite=store.favorites(page("series").put("keys",new JSONArray().put("series:Aurora"))).getJSONArray("items").getJSONObject(0);
+        assertEquals("Aurora Revisada",favorite.getString("title"));assertEquals("Aurora",favorite.getString("favoriteSeriesTitle"));assertEquals(15,favorite.getInt("episodeCount"));
     }
     @Test public void interruptedImportRollsBackRowsAndDirectory()throws Exception{
         store.importReader("test",new StringReader(rows(15)),"https://example.test/list");

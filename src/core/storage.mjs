@@ -19,5 +19,5 @@ export function saveState(state) {
   catch { return false; }
 }
 export function itemKey(item, playlistId) {
-  return String(playlistId || "demo") + "|" + (item.type === "series" ? "series:" + item.title : item.url);
+  return String(playlistId || "demo") + "|" + (item.type === "series" ? "series:" + (item.favoriteSeriesTitle || item.title) : item.url);
 }

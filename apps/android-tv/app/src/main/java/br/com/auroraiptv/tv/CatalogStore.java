@@ -121,7 +121,7 @@ final class CatalogStore extends SQLiteOpenHelper {
         private void touch(JSONObject row,int direction) throws Exception {
             String type=row.optString("type","unknown");kinds.computeIfAbsent(type,k->new long[1])[0]+=direction;
             touchGroup.bindString(1,type);touchGroup.bindString(2,row.optString("group"));touchGroup.executeInsert();
-            if(type.equals("series")){touchShow.bindString(1,CatalogParser.seriesKey(row.getString("title")));touchShow.executeInsert();}
+            if(type.equals("series")){touchShow.bindString(1,CatalogParser.seriesKey(row.optString("catalogSeriesTitle",row.getString("title"))));touchShow.executeInsert();}
         }
         void accept(JSONObject input) throws Exception {
             if(Thread.currentThread().isInterrupted())throw new InterruptedIOException();
@@ -132,9 +132,17 @@ final class CatalogStore extends SQLiteOpenHelper {
             // Keep legacy semantics and opaque provider URLs exactly; never guess identity from title.
             String previous="";find.bindString(1,playlist);find.bindString(2,url);
             try{previous=find.simpleQueryForString();}catch(SQLiteDoneException ignored){}
+            if(type.equals("series")){
+                String identity=CatalogParser.seriesTitle(row.getString("title"));
+                if(!previous.isEmpty()){
+                    JSONObject old=new JSONObject(previous);
+                    if(old.optString("type").equals("series"))identity=old.optString("catalogSeriesTitle",CatalogParser.seriesTitle(old.getString("title")));
+                }
+                row.put("catalogSeriesTitle",identity);
+            }
             String json=row.toString();if(previous.equals(json))return;
             boolean existing=!previous.isEmpty();if(existing)touch(new JSONObject(previous),-1);touch(row,1);
-            int[] episode=CatalogParser.episode(row.getString("title"));String show=type.equals("series")?CatalogParser.seriesKey(row.getString("title")):"";
+            int[] episode=CatalogParser.episode(row.getString("title"));String show=type.equals("series")?CatalogParser.seriesKey(row.getString("catalogSeriesTitle")):"";
             SQLiteStatement statement=existing?update:insert;int b=1;
             if(!existing){statement.bindString(b++,playlist);statement.bindString(b++,url);}
             statement.bindString(b++,type);statement.bindString(b++,row.getString("group"));statement.bindString(b++,show);
@@ -152,7 +160,7 @@ final class CatalogStore extends SQLiteOpenHelper {
                 JSONObject row=new JSONObject(first);String title=CatalogParser.seriesTitle(row.getString("title"));
                 boolean adult=number(db,"SELECT EXISTS(SELECT 1 FROM entries WHERE playlist=? AND show_key=? AND adult=1)",playlist,key)!=0;
                 JSONObject directory=new JSONObject().put("title",title).put("type","series").put("logo",row.optString("logo")).put("group",row.optString("group"))
-                    .put("showKey",key).put("episodeCount",count).put("restricted",adult);
+                    .put("showKey",key).put("favoriteSeriesTitle",row.optString("catalogSeriesTitle",title)).put("episodeCount",count).put("restricted",adult);
                 db.execSQL("INSERT OR REPLACE INTO shows VALUES(?,?,?,?,?)",new Object[]{playlist,key,CatalogParser.normalized(title),adult?1:0,directory.toString()});
             }}
             try(Cursor c=db.rawQuery("SELECT kind,name FROM touched_groups",null)){while(c.moveToNext()){

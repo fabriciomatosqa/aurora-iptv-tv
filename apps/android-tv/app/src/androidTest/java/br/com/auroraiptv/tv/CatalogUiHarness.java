@@ -27,7 +27,12 @@ final class CatalogUiHarness implements AutoCloseable {
         fail("WebView condition timed out: "+expression+"; body="+js("document.body.innerText.slice(-1200)"));
     }
     void seed(JSONObject state)throws Exception{
-        js("localStorage.setItem('aurora-tv-preview-v1',"+JSONObject.quote(state.toString())+");setTimeout(()=>location.reload(),0);true");
+        js("localStorage.setItem('aurora-tv-preview-v1',"+JSONObject.quote(state.toString())+");true");reload();
+    }
+    void reload()throws Exception{
+        String token=java.util.UUID.randomUUID().toString();
+        js("window.__oldCatalogDocument="+JSONObject.quote(token)+";setTimeout(()=>location.reload(),0);true");
+        waitFor("window.__oldCatalogDocument!=="+JSONObject.quote(token)+" && document.readyState==='complete' && typeof window.auroraCatalogResponse==='function'",30000);
     }
     void click(String selector)throws Exception{js("document.querySelector("+JSONObject.quote(selector)+").click();true");}
     void restore()throws Exception{
