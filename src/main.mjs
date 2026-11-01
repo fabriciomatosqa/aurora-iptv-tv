@@ -12,11 +12,22 @@ import {parseLgM3U,reclassifyLgItems,auditLgCatalog,mergeLgPlaylist} from "./cor
 import {LG_LIBRARY_ROUTES, lgHomeMarkup, lgSecondaryMarkup, lgGroupKey, lgFacets} from "./core/lg-layout.mjs";
 import {lgBrowseModel,lgSeriesGroups,lgMatchSchedule} from "./core/lg-browser.mjs";
 import {lgRail,lgBrowserHeader,lgEpgMarkup,lgMovieMarkup,lgEpisodesMarkup,lgFootballHomeMarkup} from "./core/lg-browser-view.mjs";
+import {hasAndroidCatalog,androidCatalog,migrateAndroidCatalog} from "./core/android-catalog.mjs";
 
 const app = document.getElementById("app");
 const playerRoot = document.getElementById("player-root");
 const state = loadState();
 const lgTv = document.body.classList.contains("lg-tv");
+const androidTv = !lgTv && hasAndroidCatalog();
+const androidSummaries=new Map(),androidHome=new Map(),androidUpdating=new Set();
+let androidView={key:"",items:[],more:false},androidOffset=0,androidGroup="",androidGroupOffset=0,androidGroups=[];
+let androidGuideToken=0,androidActivation=0,androidMatches=[],androidSeasons=[],androidSeason="";
+let androidSearchTimer=null;
+let androidLegacy=null;
+if(androidTv)for(const playlist of state.playlists){
+  if(playlist.items?.length)playlist.legacyItemsPending=true;
+  if(playlist.guide?.programs?.length)playlist.legacyGuidePending=true;
+}
 const LG_PAGE_SIZE=48;
 const lgNavPages=[
   ["home","Início","home"],["live","Ao Vivo","tv"],["movies","Filmes","film"],
@@ -67,20 +78,22 @@ const testItem = { title: "Vídeo livre de demonstração (CC0)", group: "Demons
 let route = "home", history = [], search = "", currentSeries = null, currentPlay = null;
 let displayItems = [], notice = "", lastPositionUpdate = -1, hideTimer = null, returnFocusKey = "";
 let parentUnlocked = false, pinFailures = 0, pinBlockedUntil = 0, tizenPlaying = false, tizenEnded = false;
-function allowed(item) { return !isRestricted(item) || (Boolean(state.parental) && parentUnlocked); }
+function allowed(item) { return !(item?.restricted || isRestricted(item)) || (Boolean(state.parental) && parentUnlocked); }
 function activePlaylist() { return state.playlists.find(p => p.id === state.activeId) || null; }
-function items() { return activePlaylist()?.items || []; }
+function items() { return androidTv?(route==="home"?androidHome.get(state.activeId)||[]:androidView.items):activePlaylist()?.items || []; }
 function stats() {
+  if(androidTv)return androidSummaries.get(state.activeId)||{live:0,movies:0,series:0,unknown:0,total:0};
   const all = items();
   return { live: all.filter(i=>i.type==="live").length, movies: all.filter(i=>i.type==="movies").length,
     series: lgTv?lgSeriesGroups(all).length:groupSeries(all).length, unknown: all.filter(i=>i.type==="unknown").length };
 }
-function persist() { if (!saveState(state)) notice = "O armazenamento local está cheio. Nesta versão de teste use listas menores."; }
+function persist() { if (!saveState(state)) notice = androidTv?"Não foi possível salvar as configurações. Os catálogos confirmados foram preservados.":"O armazenamento local está cheio. Nesta versão de teste use listas menores."; }
 function navigate(next) { if (next === route) return; history.push(route);
+  if(androidTv){androidOffset=0;androidGroup="";androidGroupOffset=0;androidSeason="";androidView.key="";}
   if(lgTv)notice=""; // Success/error notices belong to the originating screen, not subsequent views.
   if(lgTv && next!=="details"){lgSelectedGroup="__all__";lgRailQuery.first="";lgRailQuery.second="";lgRailLimit.first=100;lgRailLimit.second=120;}
   route = next; search = ""; resetLgPage();render();lgScrollMainTop(); }
-function goBack() { if (currentPlay) { closePlayer(); return; } if (history.length) { route = history.pop(); search = ""; resetLgPage();render();lgScrollMainTop(); } else if (route !== "home") { route = "home"; resetLgPage();render();lgScrollMainTop(); } }
+function goBack() { if (currentPlay) { closePlayer(); return; } if(androidTv){androidOffset=0;androidView.key="";} if (history.length) { route = history.pop(); search = ""; resetLgPage();render();lgScrollMainTop(); } else if (route !== "home") { route = "home"; resetLgPage();render();lgScrollMainTop(); } }
 function pageShell(label) {
   return '<div class="topbar"><div class="eyebrow">' + esc(label) + '</div><div class="topright">AURORA IPTV TV · PRÉVIA 0.2.0</div></div>';
 }
@@ -157,6 +170,105 @@ function guideRows(channels) {
   }).filter(Boolean).join("");
   return rows ? '<section><h2>Programação de canais</h2><div class="saved-list">'+rows+'</div></section>' : "";
 }
+function androidRequestKey(){return JSON.stringify([state.activeId,route,search,androidOffset,androidGroup,androidGroupOffset,androidSeason,
+  currentSeries?.showKey,Boolean(state.parental)&&parentUnlocked,state.favorites,androidGuideToken]);}
+function ensureAndroidView(){
+  if(!androidTv)return;
+  if(!activePlaylist()){androidView={key:"",items:[],more:false};androidMatches=[];return;}
+  if(!androidSummaries.get(state.activeId)?.ready){
+    if(androidLegacy?.id===state.activeId)ensureAndroidLegacyView();else{androidView={key:"",items:[],more:false};androidMatches=[];}
+    return;
+  }
+  if(route==="settings")return;
+  const key=androidRequestKey();if(androidView.key===key)return;
+  androidView={key,items:[],more:false,loading:true};
+  const playlist=state.activeId,unlocked=Boolean(state.parental)&&parentUnlocked;
+  const base={playlist,unlocked,offset:androidOffset,search,group:androidGroup};
+  const selectedRoute=route;
+  const task=async()=>{
+    if(selectedRoute==="home"){
+      const pages=await Promise.all(["live","movies","series"].map(kind=>androidCatalog("page",{playlist,unlocked,kind,limit:3})));
+      return {items:pages.flatMap(page=>page.items),more:false};
+    }
+    if(selectedRoute==="football"){
+      const guide=epgGuide(),canon=v=>String(v||"").normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLocaleLowerCase("pt-BR").replace(/[^a-z0-9]+/g," ").trim();
+      const names=new Map(),programIds=[...new Set(guide.programs.map(p=>p.channel))];
+      for(const ch of guide.channels)names.set(canon(ch.name),(names.get(canon(ch.name))||0)+1);
+      const descriptions=new Map(guide.channels.map(ch=>[ch.id,ch]));
+      const channels=programIds.map(id=>({id,name:descriptions.get(id)?.name||"",uniqueName:names.get(canon(descriptions.get(id)?.name))===1}));
+      let matches=[];
+      for(let offset=0;offset<channels.length;offset+=128){
+        if(androidView.key!==key)return {items:[]};
+        const batch=await androidCatalog("guideChannels",{playlist,unlocked,channels:channels.slice(offset,offset+128),programIds});
+        const seen=new Set(matches.map(m=>m.program.channel+"|"+m.program.start+"|"+m.program.title));
+        matches=[...matches,...footballFromEpg(batch,guide).filter(m=>!seen.has(m.program.channel+"|"+m.program.start+"|"+m.program.title))].sort((a,b)=>a.program.start-b.program.start).slice(0,100);
+      }
+      return {items:[],matches};
+    }
+    if(selectedRoute==="favorites")return androidCatalog("favorites",{...base,keys:state.favorites.filter(k=>k.startsWith(playlist+"|")).map(k=>k.slice(playlist.length+1))});
+    const details=selectedRoute==="details",kind=details?"series":selectedRoute;
+    const [page,facets]=await Promise.all([
+      androidCatalog("page",{...base,kind,show:details?currentSeries?.showKey||"":"",season:details?androidSeason:""}),
+      details?androidCatalog("seasons",{playlist,unlocked,show:currentSeries.showKey}):androidCatalog("groups",{playlist,unlocked,kind,offset:androidGroupOffset})
+    ]);
+    return {...page,...(details?{seasons:facets}:{groups:facets})};
+  };
+  void task().then(result=>{
+    if(androidView.key!==key || state.activeId!==playlist)return;
+    androidView={...result,key,loading:false};
+    if(selectedRoute==="home")androidHome.set(playlist,result.items);
+    if(result.groups)androidGroups=result.groups;if(result.seasons)androidSeasons=result.seasons;
+    if(result.matches)androidMatches=result.matches;
+    render(document.activeElement?.dataset.focus||"");
+  }).catch(()=>{if(androidView.key!==key)return;androidView.loading=false;notice="Não foi possível ler esta página. Seus dados foram preservados.";render();});
+}
+function ensureAndroidLegacyView(){
+  if(route==="settings")return;
+  const key=androidRequestKey();if(androidView.key===key)return;
+  androidView={key,items:[],more:false,loading:true};
+  const legacy=androidLegacy,selectedRoute=route,query=search.trim().toLocaleLowerCase("pt-BR"),group=androidGroup,offset=androidOffset;
+  const keys=new Set(state.favorites),rows=[],homeCounts={live:0,movies:0};let matched=0;
+  void (async()=>{
+    // This one-time fallback uses the old array that already had to be read. It
+    // retains only one visible window, yields between blocks, and stops at a sentinel.
+    // Series stay hidden until the complete directory's parental aggregation commits.
+    for(let i=0;i<legacy.items.length;i++){
+      if(androidView.key!==key || androidLegacy!==legacy)return;
+      const item=legacy.items[i];
+      if(item.type==="live"||item.type==="movies"){
+        const matches=selectedRoute==="home"?homeCounts[item.type]<3:selectedRoute==="favorites"?keys.has(itemKey(item,legacy.id)):item.type===selectedRoute;
+        if(matches && allowed(item) && (!group||item.group===group) && (!query||item.title.toLocaleLowerCase("pt-BR").includes(query))){
+          if(selectedRoute==="home"){rows.push(item);homeCounts[item.type]++;if(homeCounts.live===3&&homeCounts.movies===3)break;}
+          else if(matched++>=offset){rows.push(item);if(rows.length>48)break;}
+        }
+      }
+      if(i%4096===4095)await new Promise(resolve=>setTimeout(resolve,0));
+    }
+    if(androidView.key!==key || androidLegacy!==legacy)return;
+    androidView={key,items:rows.slice(0,48),more:rows.length>48,loading:false};
+    if(selectedRoute==="home")androidHome.set(legacy.id,androidView.items);
+    render(document.activeElement?.dataset.focus||"");
+  })();
+}
+function androidCatalogue(type,title,details=false){
+  const current=androidView.items.filter(allowed),loading=androidView.loading;
+  const controls='<div class="actions" style="margin:16px 0">'+
+    (androidOffset?'<button class="btn" data-action="android-prev" data-focus="android-prev">Página anterior</button>':"")+
+    '<span>Página '+(Math.floor(androidOffset/48)+1)+' · até 48 itens por página</span>'+
+    (androidView.more?'<button class="btn" data-action="android-next" data-focus="android-next">Próxima página</button>':"")+'</div>';
+  let filter="";
+  if(details)filter='<div class="actions"><button class="btn" data-action="back" data-focus="back">Voltar</button><button class="btn" data-action="favorite-series" data-focus="favorite">'+
+    (state.favorites.includes(itemKey(currentSeries,state.activeId))?"Remover dos favoritos":"Favoritar série")+'</button><label>Temporada <select data-input="android-season" data-focus="android-season"><option value="">Todas</option>'+androidSeasons.map(s=>'<option value="'+s+'" '+(String(s)===androidSeason?'selected':"")+'>'+s+'</option>').join("")+'</select></label></div>';
+  else if(type!=="favorites")filter='<div class="actions" style="margin:12px 0"><label>Categoria <select data-input="android-group" data-focus="android-group"><option value="">Todas</option>'+
+    [...new Set([...androidGroups.slice(0,48),...(androidGroup?[androidGroup]:[])])].map(g=>'<option value="'+esc(g)+'" '+(g===androidGroup?'selected':"")+'>'+esc(g||"Sem categoria")+'</option>').join("")+'</select></label>'+
+    (androidGroupOffset?'<button class="btn" data-action="android-group-prev" data-focus="android-group-prev">Categorias anteriores</button>':"")+
+    (androidGroups.length>48?'<button class="btn" data-action="android-group-next" data-focus="android-group-next">Mais categorias</button>':"")+'</div>';
+  const converting=androidLegacy?.id===state.activeId&&!androidSummaries.get(state.activeId)?.ready;
+  return pageShell(title)+'<h2>'+esc(title)+'</h2>'+(converting?'<p role="status">Conversão do catálogo em andamento. Canais e filmes salvos já podem ser reproduzidos; séries e categorias completas ficam disponíveis após a confirmação.</p>':"")+filter+
+    '<div class="searchbar"><input class="search" type="search" data-focus="search" data-input="search" placeholder="Buscar por nome..." value="'+esc(search)+'" aria-label="Buscar"></div>'+
+    (loading?'<p role="status">Carregando esta página do catálogo salvo…</p>':current.length?cards(current):empty("Nenhum conteúdo nesta página","Tente outra categoria ou pesquisa."))+controls+
+    '<button class="btn" data-action="android-retry" data-focus="android-retry">Recarregar página</button>'+(type==="live"?guideRows(current):"");
+}
 function home() {
   const s = stats(), playlist = activePlaylist();
   if (lgTv) {
@@ -173,20 +285,22 @@ function home() {
   }
   const recent = state.recent.filter(it => (!it.playlistId || it.playlistId === state.activeId) && allowed(it)).slice(0, 5);
   const total = s.live + s.movies + s.series;
+  const converting=androidTv && androidLegacy?.id===state.activeId && !androidSummaries.get(state.activeId)?.ready;
   return pageShell("Seu entretenimento, sua escolha") +
     '<div class="hero"><div class="hero-inner"><div class="kicker">Experiência feita para televisão</div>' +
     '<h1>AURORA<br>IPTV TV</h1><p>Suas playlists, seus favoritos e seus conteúdos. Tudo pronto para navegar com o controle remoto.</p>' +
     '<div class="actions"><button class="btn primary" data-focus="hero-start" data-action="' + (playlist ? "live" : "settings") + '">' + icon(playlist ? "play" : "plus") + (playlist ? " Explorar canais" : " Adicionar playlist") + '</button>' +
     '<button class="btn" data-action="test" data-focus="hero-demo">' + icon("play") + ' Testar vídeo livre</button></div></div></div>' +
-    '<div class="stats"><div class="stat"><strong>' + s.live + '</strong><span>Canais</span></div><div class="stat"><strong>' + s.movies + '</strong><span>Filmes</span></div><div class="stat"><strong>' + s.series + '</strong><span>Séries</span></div><div class="stat"><strong>' + state.favorites.length + '</strong><span>Favoritos</span></div></div>' +
+    (converting?'<p role="status">Preparando os totais e as séries. Os canais e filmes salvos continuam acessíveis.</p>':'<div class="stats"><div class="stat"><strong>' + s.live + '</strong><span>Canais</span></div><div class="stat"><strong>' + s.movies + '</strong><span>Filmes</span></div><div class="stat"><strong>' + s.series + '</strong><span>Séries</span></div><div class="stat"><strong>' + state.favorites.length + '</strong><span>Favoritos</span></div></div>') +
     '<section><div class="section-head"><h2>Continuar assistindo</h2><span>' + (recent.length ? "Últimos conteúdos" : "Ainda não há histórico") + '</span></div>' +
     (recent.length ? cards(recent) : empty("Sua próxima história começa aqui", "Reproduza um conteúdo para encontrá-lo nesta seção.")) + '</section>' +
-    '<section><div class="section-head"><h2>Sua biblioteca</h2><span>' + total + " títulos identificados" + '</span></div>' +
-    (total ? cards([...items().filter(i=>i.type==="live" && allowed(i)).slice(0, 3), ...items().filter(i=>i.type==="movies" && allowed(i)).slice(0, 3), ...groupSeries(items()).filter(allowed).slice(0, 3)]) :
+    '<section><div class="section-head"><h2>Sua biblioteca</h2><span>' + (converting?"Catálogo salvo em conversão":total+" títulos identificados") + '</span></div>' +
+    ((total||converting) ? cards(androidTv?items().filter(allowed):[...items().filter(i=>i.type==="live" && allowed(i)).slice(0, 3), ...items().filter(i=>i.type==="movies" && allowed(i)).slice(0, 3), ...groupSeries(items()).filter(allowed).slice(0, 3)]) :
     empty("Adicione sua primeira playlist", "O aplicativo não inclui canais, filmes ou séries. Use somente fontes às quais você tenha acesso legítimo.", true)) + '</section>' +
     (s.unknown ? '<p class="muted">' + s.unknown + ' entradas sem classificação confiável. Consulte Configurações; elas não são exibidas incorretamente como canais ou filmes.</p>' : "");
 }
 function catalogue(type, title) {
+  if(androidTv)return androidCatalogue(type,title);
   let content = type === "series" ? groupSeries(items()) : items().filter(i=>i.type===type);
   if (type === "favorites") {
     const shows=lgTv?lgSeriesGroups(items()):groupSeries(items());
@@ -212,6 +326,7 @@ function catalogue(type, title) {
 }
 function seriesDetails() {
   if (!currentSeries) return empty("Série não encontrada", "Volte ao catálogo.");
+  if(androidTv && currentSeries.showKey)return androidCatalogue("series",currentSeries.title,true);
   return pageShell("Séries / Episódios") +
    '<div class="actions" style="margin-bottom:18px"><button class="btn" data-action="back" data-focus="back">' + icon("back") + ' Voltar</button>' +
    '<button class="btn" data-action="favorite-series" data-focus="favorite">' + icon("star") +
@@ -220,7 +335,7 @@ function seriesDetails() {
    '<section><h2>Episódios disponíveis</h2>' + cards(currentSeries.episodes) + '</section>';
 }
 function football() {
-  const matches=footballFromEpg(items().filter(allowed), epgGuide());
+  const matches=androidTv?androidMatches:footballFromEpg(items().filter(allowed), epgGuide());
   const rows=matches.slice(0,100).map(match=>{
     const index=displayItems.push(match.channel)-1;
     const now=Date.now(),p=match.program;
@@ -333,6 +448,7 @@ function lgTripleBrowser(preferredFocus="") {
   observeLgPages();
 }
 function render(preferredFocus = "") {
+  ensureAndroidView();
   displayItems=[];
   lgObserver?.disconnect();lgObserver=null;
   document.body.classList.toggle("theme-light",state.theme==="light");
@@ -365,8 +481,9 @@ function render(preferredFocus = "") {
   observeLgPages();
 }
 function openItem(item) {
+  if(!item)return;
   if (!allowed(item)) {notice="Conteúdo restrito. Configure ou desbloqueie o PIN parental.";route="settings";render("pin-enter");return;}
-  if (item.type === "series" && Array.isArray(item.episodes)) {
+  if (item.type === "series" && (Array.isArray(item.episodes) || (androidTv && item.showKey))) {
     currentSeries = item; navigate("details"); return;
   }
   startPlayer(item);
@@ -463,7 +580,7 @@ async function saveGuide(form) {
     const guide=parseXMLTV(xml);
     if(!guide.programs.length)throw Error("O XMLTV não contém programas válidos.");
     await saveGuideDB(p.id,guide);
-    p.guide=guide;if(url)p.guideUrl=url;p.lastGuideAttemptDay=localDay();
+    p.guide=guide;if(url)p.guideUrl=url;p.lastGuideAttemptDay=localDay();if(androidTv)androidGuideToken++;
     persist();notice="Guia importado: "+guide.programs.length+" programas.";render("nav-settings");
   }catch(err){notice="Não foi possível importar XMLTV: "+err.message+". Verifique também CORS.";render("nav-settings");}
 }
@@ -475,6 +592,7 @@ async function refreshGuideQuiet(playlist) {
     if(!newGuide.programs.length) return;
     await saveGuideDB(playlist.id,newGuide);
     playlist.guide=newGuide;persist();
+    if(androidTv && state.activeId===playlist.id){androidGuideToken++;render(document.activeElement?.dataset.focus||"");}
   } catch { /* Never erase last known valid guide on connectivity/CORS failures. */ }
 }
 async function savePlaylist(form) {
@@ -483,6 +601,19 @@ async function savePlaylist(form) {
   const url = String(data.get("url")||"").trim();
   const pasted = String(data.get("m3u")||"").trim();
   if (!name || (!pasted && !safeMedia(url))) { notice="Informe um nome e uma URL HTTP(S) ou o texto M3U."; render("name"); return; }
+  if(androidTv){
+    const submit=form.querySelector('[type="submit"]');if(submit)submit.disabled=true;
+    const id=globalThis.crypto?.randomUUID?.()||String(Date.now());
+    try{
+      const summary=await androidCatalog("refresh",{playlist:id,url,text:pasted});
+      state.playlists.push({id,name,url,guideUrl:summary.guideUrl,updatedAt:Date.now(),lastAttemptDay:localDay()});
+      state.activeId=id;androidSummaries.set(id,summary);androidView.key="";androidOffset=0;androidGroup="";androidGroupOffset=0;
+      persist();notice="Playlist importada: "+summary.total+" entradas válidas.";render("nav-settings");
+      void loadAndroidGuide(activePlaylist());
+    }catch(error){notice="Não foi possível importar. "+error.message;render("name");}
+    finally{if(submit)submit.disabled=false;}
+    return;
+  }
   try {
     let text = pasted;
     if (!text) {
@@ -499,6 +630,19 @@ async function savePlaylist(form) {
 }
 async function refreshActive({quiet=false, playlist=activePlaylist()}={}) {
   if(!playlist?.url)return;
+  if(androidTv){
+    if(androidUpdating.has(playlist.id))return;
+    androidUpdating.add(playlist.id);playlist.lastAttemptDay=localDay();persist();
+    try{
+      const result=await androidCatalog("refresh",{playlist:playlist.id,url:playlist.url});
+      if(!state.playlists.includes(playlist))return;
+      androidSummaries.set(playlist.id,result);playlist.updatedAt=Date.now();if(result.guideUrl)playlist.guideUrl=result.guideUrl;
+      persist();
+      if(state.activeId===playlist.id){androidView.key="";if(!quiet)notice="Atualização concluída: "+result.added+" itens novos. O catálogo anterior foi preservado.";render();}
+    }catch(error){if(state.activeId===playlist.id&&!quiet){notice="Atualização falhou. Seus dados foram preservados.";render("nav-settings");}}
+    finally{androidUpdating.delete(playlist.id);}
+    return;
+  }
   playlist.lastAttemptDay=localDay();
   persist();
   try{
@@ -589,13 +733,22 @@ app.addEventListener("click",event=>{
   else if (action==="test") startPlayer(testItem);
   else if (action==="back") goBack();
   else if (action==="favorite-series" && currentSeries) favorite(currentSeries);
-  else if (action==="activate") {state.activeId=target.dataset.id;search="";resetLgPage();persist();render("nav-settings");}
+  else if (androidTv && ["android-prev","android-next","android-group-prev","android-group-next","android-retry"].includes(action)){
+    if(action==="android-prev")androidOffset=Math.max(0,androidOffset-48);
+    if(action==="android-next"&&androidView.more)androidOffset+=48;
+    if(action==="android-group-prev")androidGroupOffset=Math.max(0,androidGroupOffset-48);
+    if(action==="android-group-next")androidGroupOffset+=48;
+    androidView.key="";render("search");
+  }
+  else if (action==="activate") {state.activeId=target.dataset.id;search="";resetLgPage();persist();if(androidTv)void activateAndroidPlaylist();render("nav-settings");}
   else if (action==="delete") {
     const id=target.dataset.id;
     if (!confirm("Excluir esta playlist e o catálogo local associado?")) return;
     void deletePlaylistData(id).catch(()=>{notice="Não foi possível remover completamente o cache anterior.";});
+    if(androidTv)void androidCatalog("delete",{playlist:id}).catch(()=>{notice="Não foi possível remover o catálogo Android.";render();});
     state.playlists=state.playlists.filter(p=>p.id!==id);
     if(state.activeId===id)state.activeId=state.playlists[0]?.id||null;
+    if(androidTv){androidSummaries.delete(id);androidHome.delete(id);void activateAndroidPlaylist();}
     persist();render("nav-settings");
   }
   else if (action==="refresh") refreshActive();
@@ -620,10 +773,19 @@ app.addEventListener("input",event=>{
     return;
   }
   if(event.target.dataset.input!=="search") return;
+  if(androidTv){
+    search=event.target.value;androidOffset=0;androidView.key="";
+    window.AuroraNative.cancelCatalogPages?.();clearTimeout(androidSearchTimer);
+    androidSearchTimer=setTimeout(()=>{render("search");},180);return;
+  }
   const cursor=event.target.selectionStart;search=event.target.value;resetLgPage();render("search");
   const input=app.querySelector('[data-input="search"]');if(input&&cursor!==null)input.setSelectionRange(cursor,cursor);
 });
 app.addEventListener("change",event=>{
+  if(androidTv && ["android-group","android-season"].includes(event.target.dataset.input)){
+    if(event.target.dataset.input==="android-group")androidGroup=event.target.value;else androidSeason=event.target.value;
+    androidOffset=0;androidView.key="";render(event.target.dataset.focus);return;
+  }
   if(event.target.id==="theme"){state.theme=event.target.value;persist();render("theme");}
 });
 playerRoot.addEventListener("click",event=>{
@@ -671,7 +833,60 @@ window.auroraNativePlaybackEnded=(key,seconds,ended)=>{
   else if(Number.isFinite(seconds)&&seconds>=0)state.positions[key]=seconds;
   persist();currentPlay=null;render(returnFocusKey);returnFocusKey="";
 };
+async function loadAndroidGuide(playlist){
+  if(!playlist)return;
+  try{
+    if(playlist.guide?.programs?.length){
+      if(playlist.legacyGuidePending){await saveGuideDB(playlist.id,playlist.guide);playlist.legacyGuidePending=false;persist();}
+    }else{
+      const guide=await loadGuide(playlist.id);
+      if(state.activeId!==playlist.id)return;
+      playlist.guide=guide||null;
+    }
+    if(state.activeId===playlist.id){androidGuideToken++;render(document.activeElement?.dataset.focus||"");}
+    if(playlist.guideUrl && state.activeId===playlist.id && playlist.lastGuideAttemptDay!==localDay())setTimeout(()=>{if(state.activeId===playlist.id)void refreshGuideQuiet(playlist);},2200);
+  }catch{/* Keep any inline legacy guide until a durable copy succeeds. */}
+}
+async function activateAndroidPlaylist(){
+  const token=++androidActivation,playlist=activePlaylist();
+  androidOffset=0;androidGroup="";androidGroupOffset=0;androidSeason="";androidView={key:"",items:[],more:false};androidGroups=[];androidSeasons=[];androidMatches=[];
+  androidLegacy=null;
+  if(!playlist){render();return;}
+  for(const other of state.playlists)if(other.id!==playlist.id && !other.legacyGuidePending)delete other.guide;
+  try{
+    let summary=await androidCatalog("summary",{playlist:playlist.id});
+    if(token!==androidActivation || state.activeId!==playlist.id)return;
+    if(!summary.ready){
+      // Old IndexedDB catalogs remain intact. Only this active playlist is read once.
+      let legacy=playlist.items?.length?playlist.items:await loadCatalog(playlist.id);
+      if(token!==androidActivation || state.activeId!==playlist.id)return;
+      if(legacy?.length){
+        androidLegacy={id:playlist.id,items:legacy};
+        notice="Preparando o catálogo salvo para leitura por páginas. Canais e filmes antigos continuam acessíveis.";render();
+        await migrateAndroidCatalog(playlist,legacy);
+        summary=await androidCatalog("summary",{playlist:playlist.id});
+        if(!summary.ready)throw Error("O catálogo não foi confirmado.");
+      }
+      legacy=null;
+    }
+    if(summary.ready){
+      if(androidLegacy?.id===playlist.id)androidLegacy=null;
+      androidSummaries.set(playlist.id,summary);delete playlist.items;playlist.legacyItemsPending=false;
+      if(summary.guideUrl)playlist.guideUrl=summary.guideUrl;
+    }
+    persist();
+    if(token!==androidActivation || state.activeId!==playlist.id)return;
+    notice="";render();
+    // Guide and inactive libraries do not delay the first committed page.
+    setTimeout(()=>{if(state.activeId===playlist.id)void loadAndroidGuide(playlist);},0);
+    if(needsDailyUpdate(playlist))setTimeout(()=>{if(state.activeId===playlist.id)void refreshActive({quiet:true,playlist});},1200);
+  }catch{
+    if(token!==androidActivation)return;
+    notice="Não foi possível preparar o catálogo local. A cópia anterior, favoritos e progresso foram preservados.";render();
+  }
+}
 async function hydrateCatalogs() {
+  if(androidTv){await activateAndroidPlaylist();return;}
   // Migrates legacy localStorage content without discarding favorites or positions.
   try {
     for(const p of state.playlists) {

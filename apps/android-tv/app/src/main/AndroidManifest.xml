@@ -5,6 +5,7 @@
     <uses-feature android:name="android.hardware.touchscreen" android:required="false" />
 
     <application android:allowBackup="false"
+        android:banner="@drawable/tv_banner"
         android:label="AURORA IPTV TV"
         android:theme="@android:style/Theme.Material.NoActionBar"
         android:usesCleartextTraffic="true"

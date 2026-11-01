@@ -10,4 +10,6 @@ dist/
 *.wgt
 *.keystore
 *.jks
+**/.gradle/
+**/build/
 .DS_Store

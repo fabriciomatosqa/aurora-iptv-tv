@@ -24,6 +24,7 @@ import android.webkit.WebView;
 import android.webkit.WebViewClient;
 import androidx.webkit.WebViewAssetLoader;
 import org.json.JSONObject;
+import java.util.concurrent.TimeUnit;
 
 // Trusted local origin only. Never add an arbitrary remote page to this WebView.
 public class MainActivity extends Activity {
@@ -31,9 +32,17 @@ public class MainActivity extends Activity {
     private static final String HOME = "https://appassets.androidplatform.net/index.html";
     private WebView browser;
     private final ExecutorService networking = Executors.newFixedThreadPool(2);
+    private final ExecutorService catalogReading = Executors.newFixedThreadPool(2);
+    private volatile Thread catalogWriterThread;
+    private final ExecutorService catalogWriting = Executors.newSingleThreadExecutor(task -> {
+        Thread thread=new Thread(task,"catalog-writer");catalogWriterThread=thread;return thread;
+    });
+    private CatalogStore catalog;
+    private volatile boolean destroyed;
 
     @Override public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        catalog = new CatalogStore(this);
         getWindow().getDecorView().setSystemUiVisibility(
             View.SYSTEM_UI_FLAG_FULLSCREEN | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION |
             View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY | View.SYSTEM_UI_FLAG_LAYOUT_STABLE);
@@ -59,7 +68,10 @@ public class MainActivity extends Activity {
                 return !HOME.equals(request.getUrl().toString());
             }
             @Override public WebResourceResponse shouldInterceptRequest(WebView view, WebResourceRequest request) {
-                return assetLoader.shouldInterceptRequest(request.getUrl());
+                WebResourceResponse response=assetLoader.shouldInterceptRequest(request.getUrl());
+                String path=request.getUrl().getPath();
+                if(response!=null && path!=null && (path.endsWith(".mjs")||path.endsWith(".js")))response.setMimeType("application/javascript");
+                return response;
             }
         });
         browser.addJavascriptInterface(new PlaybackBridge(), "AuroraNative");
@@ -67,6 +79,22 @@ public class MainActivity extends Activity {
     }
 
     public final class PlaybackBridge {
+        @JavascriptInterface public int catalogVersion() { return 1; }
+        @JavascriptInterface public void cancelCatalogPages() { if(!destroyed)catalog.cancelPageQueries(); }
+        @JavascriptInterface public void catalogRequest(String operation,String payload,String requestId) {
+            if(destroyed || requestId.length()>80 || payload.length()>8_000_000)return;
+            boolean read=java.util.Arrays.asList("summary","page","groups","seasons","favorites","guideChannels").contains(operation);
+            (read?catalogReading:catalogWriting).execute(() -> {
+                Object result=null;String error="";
+                try {
+                    JSONObject request=new JSONObject(payload);
+                    result=read?catalog.read(operation,request):catalog.mutate(operation,request);
+                } catch(Exception e) {error="Não foi possível concluir a operação. O catálogo anterior foi preservado.";}
+                final String js="window.auroraCatalogResponse && window.auroraCatalogResponse("+JSONObject.quote(requestId)+","+
+                    (result==null?"null":result.toString())+","+JSONObject.quote(error)+")";
+                if(!destroyed)runOnUiThread(()->{if(!destroyed)browser.evaluateJavascript(js,null);});
+            });
+        }
         @JavascriptInterface public void fetchText(String rawUrl, String requestId) {
             networking.execute(() -> {
                 String content = "", error = "";
@@ -139,8 +167,20 @@ public class MainActivity extends Activity {
         super.onConfigurationChanged(configuration);
     }
     @Override public void onDestroy() {
+        destroyed=true;
         browser.removeJavascriptInterface("AuroraNative");
         networking.shutdownNow();
+        catalogReading.shutdownNow();
+        catalog.cancelPageQueries();
+        // Interrupt streaming imports; their try/finally rolls back before closing the DB.
+        catalogWriting.execute(catalog::abortMigration);
+        catalogWriting.shutdown();
+        if(catalogWriterThread!=null)catalogWriterThread.interrupt();
+        new Thread(()->{
+            try {
+                if(catalogWriting.awaitTermination(45,TimeUnit.SECONDS) && catalogReading.awaitTermination(45,TimeUnit.SECONDS))catalog.close();
+            }catch(InterruptedException ignored){Thread.currentThread().interrupt();}
+        },"catalog-close").start();
         browser.destroy();
         super.onDestroy();
     }
