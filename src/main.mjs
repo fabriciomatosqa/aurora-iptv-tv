@@ -456,6 +456,7 @@ function lgTripleBrowser(preferredFocus="") {
   observeLgPages();
 }
 function render(preferredFocus = "") {
+  const editing=androidTv && document.activeElement?.dataset.input==="search"?{start:document.activeElement.selectionStart,end:document.activeElement.selectionEnd}:null;
   ensureAndroidView();
   displayItems=[];
   lgObserver?.disconnect();lgObserver=null;
@@ -486,6 +487,7 @@ function render(preferredFocus = "") {
     secondary+'<main role="main">'+
     (notice?'<div class="notice" role="status">'+esc(notice)+'</div>':"")+page+'</main>';
   restoreFocus(preferredFocus || "nav-"+(route==="details"?"series":route));
+  if(editing && document.activeElement?.dataset.input==="search" && editing.start!==null)document.activeElement.setSelectionRange(editing.start,editing.end);
   observeLgPages();
 }
 function openItem(item) {

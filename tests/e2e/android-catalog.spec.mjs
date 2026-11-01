@@ -23,6 +23,12 @@ test("Android cached pages use only the active native library while a remote ref
   await page.goto("/");await expect(page.getByRole("button",{name:"Abrir Movie 0",exact:true})).toBeVisible();
   await expect.poll(()=>page.evaluate(()=>window.__refreshHeld)).toBe(true);
   await page.locator("[data-focus=nav-movies]").click();await expect(page.locator(".card")).toHaveCount(48);
+  await page.locator("[data-input=search]").fill("Movie");
+  await page.locator("[data-input=search]").evaluate(input=>input.setSelectionRange(2,2));
+  await expect.poll(()=>page.evaluate(()=>window.__requests.filter(r=>r.operation==="page").at(-1)?.search)).toBe("Movie");
+  await expect.poll(()=>page.locator("[data-input=search]").evaluate(input=>input.selectionStart)).toBe(2);
+  await page.locator("[data-input=search]").fill("");
+  await expect.poll(()=>page.evaluate(()=>window.__requests.filter(r=>r.operation==="page").at(-1)?.search)).toBe("");
   for(let i=1;i<=4;i++){await page.locator("[data-action=android-next]").click();await expect(page.locator(".card-title").first()).toHaveText("Movie "+(i*48));}
   await expect(page.locator(".card")).toHaveCount(48);await page.locator(".card").first().click();
   expect(await page.evaluate(()=>window.__plays[0][0])).toBe("https://example.test/192");
