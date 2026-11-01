@@ -96,6 +96,15 @@ public class CatalogStoreTest {
             StringBuilder plan=new StringBuilder();while(c.moveToNext())plan.append(c.getString(3));assertTrue(plan.toString(),plan.toString().contains("entries_type"));assertFalse(plan.toString(),plan.toString().contains("SCAN TABLE entries"));
         }
     }
+    @Test public void legacyAndRemoteUrlsKeepExactFavoriteBytesIncludingSpacesAndPipeOptions()throws Exception{
+        String url="HTTP://example.test/with space|User-Agent=Demo";
+        JSONArray legacy=new JSONArray().put(new JSONObject().put("title","Legacy Movie").put("type","movies").put("group","Filmes").put("url",url));
+        store.mutate("legacyBegin",page("movies"));store.mutate("legacyAppend",page("movies").put("items",legacy));store.mutate("legacyCommit",page("movies"));
+        assertEquals(url,store.favorites(page("movies").put("keys",new JSONArray().put(url))).getJSONArray("items").getJSONObject(0).getString("url"));
+        JSONObject delta=store.importReader("test",new StringReader("#EXTM3U\n#EXTINF:-1 group-title=\"Filmes\",Legacy Movie\n"+url+"\n#EXTINF:-1 group-title=\"Filmes\",Relative\n../with space.mp4\n"),"https://example.test/root/list.m3u");
+        assertEquals(1,delta.getInt("added"));assertEquals(0,delta.getInt("changed"));assertEquals(2,delta.getInt("total"));
+        assertEquals("https://example.test/with space.mp4",store.page(page("movies").put("offset",1)).getJSONArray("items").getJSONObject(0).getString("url"));
+    }
     static final class Reply implements AutoCloseable {
         final ServerSocket socket;final ExecutorService executor=Executors.newSingleThreadExecutor();final Future<?> future;volatile String request="";
         Reply(int status,byte[] body,String extra,long declared)throws Exception{

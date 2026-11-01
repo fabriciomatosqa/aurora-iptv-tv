@@ -17,11 +17,14 @@ import java.util.*;
 @RunWith(AndroidJUnit4.class)
 public class CatalogPerformanceTest {
     final Context context=InstrumentationRegistry.getInstrumentation().getTargetContext();
+    private JSONArray evidence;private File evidenceFile;
+    void saveEvidence()throws Exception{try(FileWriter writer=new FileWriter(evidenceFile)){writer.write(evidence.toString(2));}}
     interface Measured {void run()throws Exception;}
     void measure(JSONObject row,String name,Measured task)throws Exception{
         long start=SystemClock.elapsedRealtimeNanos(),cpu=Process.getElapsedCpuTime();task.run();
         row.getJSONObject("elapsed_ms").put(name,(SystemClock.elapsedRealtimeNanos()-start)/1_000_000.0);
         row.getJSONObject("cpu_ms").put(name,Process.getElapsedCpuTime()-cpu);row.getJSONObject("sampled_pss_kib").put(name,Debug.getPss());
+        saveEvidence();
     }
     static void generate(File file,int size,boolean extra)throws Exception{
         try(BufferedWriter out=new BufferedWriter(new FileWriter(file),65536)){
@@ -36,6 +39,7 @@ public class CatalogPerformanceTest {
         Bundle args=InstrumentationRegistry.getArguments();assumeTrue("true".equals(args.getString("catalogBenchmark")));
         String[] sizes=args.getString("catalogSizes","10000,100000,300000,600000,1200000").split(",");JSONArray results=new JSONArray();
         File input=new File(context.getCacheDir(),"tv-benchmark.m3u"),output=new File(context.getFilesDir(),"tv-catalog-benchmark.json");
+        evidence=results;evidenceFile=output;
         for(int index=0;index<sizes.length;index++){
             int size=Integer.parseInt(sizes[index]);String id="benchmark-"+size;CatalogStore store=new CatalogStore(context);
             store.getWritableDatabase().delete("libraries","id=?",new String[]{id});
@@ -64,10 +68,11 @@ public class CatalogPerformanceTest {
                             row.getJSONObject("elapsed_ms").put("visible_page_"+kind,(SystemClock.elapsedRealtimeNanos()-start)/1_000_000.0);
                         }
                         assertEquals("true",ui.js("JSON.parse(localStorage.getItem('aurora-tv-preview-v1')).positions["+JSONObject.quote(key)+"]===21"));
+                        saveEvidence();
                         if(size<=100000){
                             // Original monolithic IndexedDB method, bounded to two smaller cases.
                             String baselineId="legacy-benchmark-"+size;
-                            ui.js("window.__legacyResult=null; (async()=>{const db=await import('./src/core/catalog-db.mjs');const p=await import('./src/core/playlist.mjs');let items=Array.from({length:"+size+"},(_,i)=>({title:'Show '+Math.floor(i/30)+' S01E'+(i%30+1),group:'Séries',type:'series',url:'https://example.test/play/'+i,logo:'',tvgId:''}));await db.saveCatalog("+JSONObject.quote(baselineId)+",items);items=null;const start=performance.now();const loaded=await db.loadCatalog("+JSONObject.quote(baselineId)+");const groups=p.groupSeries(loaded);window.__legacyResult={read_and_group_ms:performance.now()-start,rows:loaded.length,shows:groups.length};await db.deletePlaylistData("+JSONObject.quote(baselineId)+");})().catch(e=>window.__legacyResult={error:String(e)});true");
+                            ui.js("window.__legacyResult=null; (async()=>{const db=await import('https://appassets.androidplatform.net/src/core/catalog-db.mjs');const p=await import('https://appassets.androidplatform.net/src/core/playlist.mjs');let items=Array.from({length:"+size+"},(_,i)=>{const demo=i<15;return {title:demo?'Benchmark Demo S01E'+String(i+1).padStart(2,'0'):i%3===0?'Canal '+i:i%3===1?'Filme '+i:'Série '+Math.floor(i/30)+' S01E'+String(i%30+1).padStart(2,'0'),group:demo?'Séries':['Canais','Filmes','Séries'][i%3],type:demo?'series':['live','movies','series'][i%3],url:'https://example.test/play/'+i.toString(16).padStart(64,'0'),logo:'',tvgId:''};});await db.saveCatalog("+JSONObject.quote(baselineId)+",items);items=null;const start=performance.now();const loaded=await db.loadCatalog("+JSONObject.quote(baselineId)+");const groups=p.groupSeries(loaded);window.__legacyResult={read_and_group_ms:performance.now()-start,rows:loaded.length,shows:groups.length};await db.deletePlaylistData("+JSONObject.quote(baselineId)+");})().catch(e=>window.__legacyResult={error:String(e)});true");
                             ui.waitFor("window.__legacyResult!==null",90000);JSONObject baseline=new JSONObject(ui.js("window.__legacyResult"));assertFalse(baseline.toString(),baseline.has("error"));row.put("legacy_indexeddb",baseline);
                         }else row.put("legacy_indexeddb","Not repeated above 100k: old path materializes the full array. No measured large-size baseline claimed.");
                     }finally{if(!leave)ui.restore();}

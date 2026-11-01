@@ -2,7 +2,7 @@ package br.com.auroraiptv.tv;
 
 import org.json.JSONObject;
 import java.io.*;
-import java.net.URI;
+import java.net.URL;
 import java.text.Normalizer;
 import java.util.*;
 import java.util.regex.*;
@@ -40,7 +40,13 @@ final class CatalogParser {
     }
     static String resolve(String base,String raw) {
         if(raw==null || raw.isEmpty())return "";
-        try {URI uri=new URI(base).resolve(raw);String scheme=uri.getScheme();return "http".equalsIgnoreCase(scheme)||"https".equalsIgnoreCase(scheme)?uri.toString():"";}
+        try {
+            String value=raw.trim();URL url=base.isEmpty()?new URL(value):new URL(new URL(base),value);
+            if(!"http".equalsIgnoreCase(url.getProtocol())&&!"https".equalsIgnoreCase(url.getProtocol()))return "";
+            // Preserve absolute provider bytes/case like the old JS parser, including
+            // spaces and pipe options it accepted. Playback still validates HTTP(S).
+            return value.regionMatches(true,0,"http://",0,7)||value.regionMatches(true,0,"https://",0,8)?value:url.toExternalForm();
+        }
         catch(Exception ignored){return "";}
     }
     private static final class Lines {

@@ -125,7 +125,9 @@ final class CatalogStore extends SQLiteOpenHelper {
         }
         void accept(JSONObject input) throws Exception {
             if(Thread.currentThread().isInterrupted())throw new InterruptedIOException();
-            String url=input.optString("url");if(CatalogParser.resolve("https://invalid.test",url).isEmpty() || !url.matches("(?i)^https?://.*"))return;
+            // Fresh remote entries are validated by the parser. Legacy rows must keep
+            // their exact original key even when they contain unusual URL characters.
+            String url=input.optString("url");if(url.isEmpty())return;
             String type=input.optString("type");if(!Arrays.asList("live","movies","series","unknown").contains(type))type="unknown";
             JSONObject row=new JSONObject().put("title",input.optString("title","Sem título")).put("group",input.optString("group")).put("url",url)
                 .put("type",type).put("logo",input.optString("logo")).put("tvgId",input.optString("tvgId"));
