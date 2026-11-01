@@ -42,3 +42,20 @@ test("failed Android migration aborts and permits retry without marking old data
   assert.equal(operations.includes("legacyCommit"),false);assert.equal(operations.at(-1),"legacyAbort");
   fail=false;await api.migrateAndroidCatalog({id:"one"},[{url:"https://example.test/1"}]);assert.equal(operations.at(-1),"legacyCommit");
 });
+test("a response from the previous WebView document cannot resolve a request after reload",async()=>{
+  const requests=[];
+  globalThis.window={AuroraNative:{catalogVersion:()=>1,catalogRequest(_operation,_payload,id){requests.push(id);}}};
+  const oldApi=await import("../src/core/android-catalog.mjs?old-document");
+  const oldResponse=window.auroraCatalogResponse,oldCall=oldApi.androidCatalog("summary",{playlist:"old"});
+  await new Promise(resolve=>setImmediate(resolve));const oldId=requests.at(-1);
+  const newApi=await import("../src/core/android-catalog.mjs?new-document");
+  let received;const newCall=newApi.androidCatalog("summary",{playlist:"new"}).then(value=>{received=value;return value;});
+  await new Promise(resolve=>setImmediate(resolve));const newId=requests.at(-1);
+  try{
+    window.auroraCatalogResponse(oldId,{ready:false},"");await new Promise(resolve=>setImmediate(resolve));
+    assert.equal(received,undefined,"Old document callback was mistaken for the new library summary");
+  }finally{
+    window.auroraCatalogResponse(newId,{ready:true},"");oldResponse(oldId,{ready:false},"");await oldCall;await newCall;
+  }
+  assert.equal(received.ready,true);
+});
