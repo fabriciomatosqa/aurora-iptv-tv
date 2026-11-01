@@ -2,6 +2,7 @@
 // In normal browsers, the native path is not available and the standard fetch/video remains.
 const callbacks = new Map();
 let seq=0;
+const documentId=globalThis.crypto?.randomUUID?.()||Date.now().toString(36)+"-"+Math.random().toString(36).slice(2);
 window.auroraNativeTextResponse=(id, content, error) => {
   const record=callbacks.get(id);
   if(!record)return;
@@ -23,7 +24,7 @@ export function loadRemoteText(url) {
     });
   }
   return new Promise((resolve,reject)=>{
-    const id=String(++seq);
+    const id=documentId+"-"+(++seq);
     const timer=setTimeout(()=>{
       callbacks.delete(id);reject(new Error("Tempo de carregamento excedido."));
     },35000);

@@ -7,6 +7,7 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    timeout-minutes: 180
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -21,17 +22,56 @@ jobs:
           packages: 'platform-tools'
       - name: Install Android SDK platform
         run: sdkmanager "platforms;android-35" "build-tools;35.0.0"
-      - run: npm run check && npm test
+      - run: npm run check && npm run check:android && npm test
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.9'
       - run: node scripts/sync-android-assets.mjs
-      - name: Build unsigned test APK
+      - name: Generate authorized synthetic playback fixture
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y ffmpeg
+          mkdir -p apps/android-tv/app/src/androidTest/assets
+          ffmpeg -hide_banner -loglevel error -f lavfi -i testsrc2=size=320x180:rate=24 -t 12 -c:v libx264 -pix_fmt yuv420p -movflags +faststart apps/android-tv/app/src/androidTest/assets/catalog-fixture.mp4
+      - name: Build developer APK and validate code
         working-directory: apps/android-tv
         run: |
-          gradle :app:assembleDebug --no-daemon
+          gradle :app:assembleDebug :app:compileDebugAndroidTestJavaWithJavac :app:lintDebug --no-daemon
       - uses: actions/upload-artifact@v4
         with:
           name: aurora-iptv-tv-android-debug-apk
           path: apps/android-tv/app/build/outputs/apk/debug/*.apk
           if-no-files-found: error
+      - name: Enable emulator acceleration
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: Verify Android TV navigation, migration, playback and large catalogs
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 34
+          target: android-tv
+          arch: x86
+          profile: tv_720p
+          ram-size: 3072M
+          disk-size: 8192M
+          heap-size: 512M
+          emulator-options: -no-window -gpu swiftshader_indirect -feature -Vulkan -no-snapshot -noaudio -no-boot-anim -camera-back none
+          disable-animations: true
+          script: |
+            adb reconnect offline
+            timeout 120 adb wait-for-device
+            adb shell getprop ro.build.version.sdk
+            adb shell getprop ro.build.characteristics
+            gradle -p apps/android-tv :app:assembleDebugAndroidTest --no-daemon
+            node scripts/run-android-catalog-checks.mjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: aurora-android-tv-catalog-verification
+          path: |
+            apps/android-tv/app/build/catalog-evidence/
+            apps/android-tv/app/build/reports/androidTests/
+            apps/android-tv/app/build/reports/lint-results-debug.html
+          if-no-files-found: ignore
