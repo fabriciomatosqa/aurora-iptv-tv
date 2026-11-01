@@ -15,6 +15,7 @@ test("native series favorite identity survives its displayed title changing",()=
   const original=itemKey({type:"series",title:"Aurora"},"one");
   const renamed=itemKey({type:"series",title:"Aurora Revisada",favoriteSeriesTitle:"Aurora"},"one");
   assert.equal(renamed,original);
+  assert.equal(itemKey({type:"series",title:"Aurora Revisada S01E01",stateKey:"series:Aurora S01E01"},"one"),"one|series:Aurora S01E01");
   assert.equal(itemKey({type:"movies",title:"Renamed",url:"https://example.test/movie"},"one"),"one|https://example.test/movie");
 });
 test("Android bridge matches asynchronous readers and serializes whole legacy migrations before refresh",async()=>{

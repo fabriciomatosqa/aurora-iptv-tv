@@ -47,6 +47,9 @@ public class CatalogStoreTest {
         assertEquals(0,result.getInt("added"));assertEquals(1,result.getInt("changed"));assertEquals(15,result.getInt("total"));
         JSONObject favorite=store.favorites(page("series").put("keys",new JSONArray().put("series:Aurora"))).getJSONArray("items").getJSONObject(0);
         assertEquals("Aurora Revisada",favorite.getString("title"));assertEquals("Aurora",favorite.getString("favoriteSeriesTitle"));assertEquals(15,favorite.getInt("episodeCount"));
+        JSONObject episode=store.page(page("series").put("show","aurora")).getJSONArray("items").getJSONObject(0);
+        assertEquals("series:Aurora S01E01",episode.getString("stateKey"));
+        assertEquals(0,store.importReader("test",new StringReader(rows(15).replace("Aurora S01E01","Aurora Revisada S01E01")),"https://example.test/list").getInt("changed"));
     }
     @Test public void interruptedImportRollsBackRowsAndDirectory()throws Exception{
         store.importReader("test",new StringReader(rows(15)),"https://example.test/list");

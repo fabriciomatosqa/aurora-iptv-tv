@@ -82,7 +82,7 @@ final class CatalogStore extends SQLiteOpenHelper {
         for(int i=0;i<keys.length();i++) {
             String key=keys.getString(i),json;
             if(key.startsWith("series:"))json=text(db,"SELECT json FROM shows WHERE playlist=? AND show_key=?"+(request.optBoolean("unlocked")?"":" AND adult=0"),playlist,key.substring(7).toLowerCase(Locale.ROOT));
-            else json=text(db,"SELECT json FROM entries WHERE playlist=? AND url=? AND kind<>'series'"+(request.optBoolean("unlocked")?"":" AND adult=0"),playlist,key);
+            else json=text(db,"SELECT json FROM entries WHERE playlist=? AND url=?"+(request.optBoolean("unlocked")?"":" AND adult=0"),playlist,key);
             if(json.isEmpty())continue;
             if(matched>=offset && rows.length()<48)rows.put(new JSONObject(json));matched++;
         }
@@ -130,7 +130,8 @@ final class CatalogStore extends SQLiteOpenHelper {
             String url=input.optString("url");if(url.isEmpty())return;
             String type=input.optString("type");if(!Arrays.asList("live","movies","series","unknown").contains(type))type="unknown";
             JSONObject row=new JSONObject().put("title",input.optString("title","Sem título")).put("group",input.optString("group")).put("url",url)
-                .put("type",type).put("logo",input.optString("logo")).put("tvgId",input.optString("tvgId"));
+                .put("type",type).put("logo",input.optString("logo")).put("tvgId",input.optString("tvgId"))
+                .put("stateKey",type.equals("series")?"series:"+input.optString("title","Sem título"):url);
             // Keep legacy semantics and opaque provider URLs exactly; never guess identity from title.
             String previous="";find.bindString(1,playlist);find.bindString(2,url);
             try{previous=find.simpleQueryForString();}catch(SQLiteDoneException ignored){}
@@ -140,14 +141,18 @@ final class CatalogStore extends SQLiteOpenHelper {
                 // Most rows retain their original title. Compare their canonical
                 // representation before decoding the old JSON just to recover identity.
                 if(!previous.isEmpty() && previous.equals(row.toString()))return;
-                if(!previous.isEmpty()){
-                    JSONObject old=new JSONObject(previous);
-                    if(old.optString("type").equals("series"))identity=old.optString("catalogSeriesTitle",CatalogParser.seriesTitle(old.getString("title")));
-                }
                 row.put("catalogSeriesTitle",identity);
             }
             String json=row.toString();if(previous.equals(json))return;
-            boolean existing=!previous.isEmpty();if(existing)touch(new JSONObject(previous),-1);touch(row,1);
+            boolean existing=!previous.isEmpty();
+            if(existing){
+                JSONObject old=new JSONObject(previous);
+                row.put("stateKey",old.optString("stateKey",old.optString("type").equals("series")?"series:"+old.getString("title"):url));
+                if(type.equals("series")&&old.optString("type").equals("series"))row.put("catalogSeriesTitle",old.optString("catalogSeriesTitle",CatalogParser.seriesTitle(old.getString("title"))));
+                json=row.toString();if(previous.equals(json))return;
+                touch(old,-1);
+            }
+            touch(row,1);
             int[] episode=CatalogParser.episode(row.getString("title"));String show=type.equals("series")?CatalogParser.seriesKey(row.getString("catalogSeriesTitle")):"";
             SQLiteStatement statement=existing?update:insert;int b=1;
             if(!existing){statement.bindString(b++,playlist);statement.bindString(b++,url);}
