@@ -32,15 +32,4 @@ try{
 }
 const matrix=JSON.parse(readFileSync(out+"/tv-catalog-benchmark.json","utf8"));
 if(JSON.stringify(matrix.map(row=>row.rows))!=="[10000,100000,300000,600000,1200000]"||matrix.some(row=>!row.elapsed_ms.two_episodes_added))throw Error("Incomplete Android TV matrix");
-// Actual process kill/restart. Launch timing and accessibility observation latency are separate.
-adb(["shell","am","force-stop",pkg]);
-const start=performance.now(),launch=adb(["shell","am","start","-W","-n",pkg+"/.MainActivity"]);
-let xml="",ready=false;
-for(let attempt=0;attempt<20;attempt++){
-  adb(["shell","uiautomator","dump","/sdcard/aurora-tv-window.xml"]);
-  xml=adb(["shell","cat","/sdcard/aurora-tv-window.xml"]);
-  if(xml.includes("Canal 15")){ready=true;break;}
-}
-writeFileSync(out+"/force-stop-window.xml",xml);
-writeFileSync(out+"/force-stop.json",JSON.stringify({catalog_rows:1200002,launch_output:launch,observed_cached_content_ms:performance.now()-start,includes_accessibility_dump_overhead:true,remote_source:"none configured",ready},null,2));
-if(!ready)throw Error("Cached TV catalog not visible after force-stop");
+await import("./verify-android-restart.mjs");
