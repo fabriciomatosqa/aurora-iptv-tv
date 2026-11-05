@@ -10,7 +10,7 @@ import {loadCatalog,saveCatalog,loadGuide,saveGuide as saveGuideDB,deletePlaylis
 import { focusFirst, restoreFocus, nextFocus } from "./core/focus.mjs";
 import {parseLgM3U,reclassifyLgItems,auditLgCatalog,mergeLgPlaylist} from "./core/lg-catalog.mjs";
 import {LG_LIBRARY_ROUTES, lgHomeMarkup, lgSecondaryMarkup, lgGroupKey, lgFacets} from "./core/lg-layout.mjs";
-import {lgBrowseModel,lgSeriesGroups,lgMatchSchedule} from "./core/lg-browser.mjs";
+import {lgBrowseModel,lgSeriesGroups,lgMatchSchedule,invalidateLgBrowserIndex} from "./core/lg-browser.mjs";
 import {lgRail,lgBrowserHeader,lgEpgMarkup,lgMovieMarkup,lgEpisodesMarkup,lgFootballHomeMarkup} from "./core/lg-browser-view.mjs";
 
 const app = document.getElementById("app");
@@ -30,6 +30,21 @@ const lgBrowseState={
   series:{platform:"",series:""}
 };
 let lgBrowserModel=null,lgRailRows={first:[],second:[]};
+let lgAllowedCache={source:null,unlocked:false,result:null};
+function lgAllowedCatalog(){
+  const source=items();
+  const unlocked=Boolean(state.parental)&&parentUnlocked;
+  if(lgAllowedCache.source===source && lgAllowedCache.unlocked===unlocked && lgAllowedCache.result)
+    return lgAllowedCache.result;
+  const result=source.filter(allowed);
+  lgAllowedCache={source,unlocked,result};
+  return result;
+}
+function invalidateLgCatalog(){
+  if(lgAllowedCache.result)invalidateLgBrowserIndex(lgAllowedCache.result);
+  if(lgAllowedCache.source)invalidateLgBrowserIndex(lgAllowedCache.source);
+  lgAllowedCache={source:null,unlocked:false,result:null};
+}
 const lgRailQuery={first:"",second:""};
 const lgRailLimit={first:100,second:120};
 let lgResetSecondScroll=false,lgResetThirdScroll=false;
@@ -276,7 +291,7 @@ function settings() {
 function lgSeriesKey(series){return String(state.activeId||"demo")+"|series:"+String(series.platform||"")+"|"+String(series.title||"");}
 function lgTripleBrowser(preferredFocus="") {
   // LG-only UI; catalogs are filtered before modelling, preserving parental policy.
-  const data=items().filter(allowed);
+  const data=lgAllowedCatalog();
   const stateForRoute=lgBrowseState[route] || {};
   const model=lgBrowseModel(route,data,epgGuide(),stateForRoute);
   lgBrowserModel=model;
@@ -493,6 +508,7 @@ async function savePlaylist(form) {
     const id=(globalThis.crypto?.randomUUID?.() || String(Date.now()));
     await saveCatalog(id,parsed.items);
     state.playlists.push({id,name,url,items:parsed.items,guideUrl:parsed.guideUrl,guide:null,importAudit:lgTv?{declared:parsed.declared,invalid:parsed.invalid}:null,updatedAt:Date.now(),lastAttemptDay:localDay()});
+    if(lgTv)invalidateLgCatalog();
     state.activeId=id; notice="Playlist importada: " + parsed.count + " entradas válidas.";
     persist(); render("nav-settings");
   } catch(error) { notice="Não foi possível importar: " + (error instanceof Error ? error.message : "erro desconhecido") + ". Confira o formato e, para URL, as permissões CORS."; render("name"); }
@@ -505,8 +521,12 @@ async function refreshActive({quiet=false, playlist=activePlaylist()}={}) {
     const parsed=lgTv?parseLgM3U(await loadRemoteText(playlist.url)):parseM3U(await loadRemoteText(playlist.url));
     if(!parsed.count)throw new Error("A lista recebida está vazia.");
     const merge=lgTv?mergeLgPlaylist(playlist.items,parsed.items):mergePlaylist(playlist.items,parsed.items);
-    await saveCatalog(playlist.id,merge.items);
-    playlist.items=merge.items;playlist.updatedAt=Date.now();
+    if(!lgTv || merge.added>0 || merge.changed>0){
+      await saveCatalog(playlist.id,merge.items);
+      if(lgTv)invalidateLgCatalog();
+      playlist.items=merge.items;
+    }
+    playlist.updatedAt=Date.now();
     if(lgTv)playlist.importAudit={declared:parsed.declared,invalid:parsed.invalid};
     if(parsed.guideUrl)playlist.guideUrl=parsed.guideUrl;
     if(!quiet){notice="Atualização concluída: "+merge.added+" itens novos, sem apagar os antigos.";persist();render("nav-settings");}
@@ -589,13 +609,14 @@ app.addEventListener("click",event=>{
   else if (action==="test") startPlayer(testItem);
   else if (action==="back") goBack();
   else if (action==="favorite-series" && currentSeries) favorite(currentSeries);
-  else if (action==="activate") {state.activeId=target.dataset.id;search="";resetLgPage();persist();render("nav-settings");}
+  else if (action==="activate") {state.activeId=target.dataset.id;search="";resetLgPage();if(lgTv)invalidateLgCatalog();persist();render("nav-settings");}
   else if (action==="delete") {
     const id=target.dataset.id;
     if (!confirm("Excluir esta playlist e o catálogo local associado?")) return;
     void deletePlaylistData(id).catch(()=>{notice="Não foi possível remover completamente o cache anterior.";});
     state.playlists=state.playlists.filter(p=>p.id!==id);
     if(state.activeId===id)state.activeId=state.playlists[0]?.id||null;
+    if(lgTv)invalidateLgCatalog();
     persist();render("nav-settings");
   }
   else if (action==="refresh") refreshActive();
@@ -679,7 +700,7 @@ async function hydrateCatalogs() {
       else p.items=(await loadCatalog(p.id))||[];
       if(lgTv) {
         const corrected=reclassifyLgItems(p.items);
-        if(corrected)await saveCatalog(p.id,p.items);
+        if(corrected){invalidateLgCatalog();await saveCatalog(p.id,p.items);}
         if(!p.importAudit)p.importAudit={declared:null,invalid:null};
       }
       if(p.guide?.programs?.length) await saveGuideDB(p.id,p.guide);
