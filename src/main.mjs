@@ -86,7 +86,7 @@ function allowed(item) { return !isRestricted(item) || (Boolean(state.parental) 
 function activePlaylist() { return state.playlists.find(p => p.id === state.activeId) || null; }
 function items() { return activePlaylist()?.items || []; }
 function stats() {
-  const all = items();
+  const all = lgTv?lgAllowedCatalog():items();
   return { live: all.filter(i=>i.type==="live").length, movies: all.filter(i=>i.type==="movies").length,
     series: lgTv?lgSeriesGroups(all).length:groupSeries(all).length, unknown: all.filter(i=>i.type==="unknown").length };
 }
@@ -176,7 +176,7 @@ function home() {
   const s = stats(), playlist = activePlaylist();
   if (lgTv) {
     const recentCount=state.recent.filter(it=>(!it.playlistId || it.playlistId===state.activeId) && allowed(it)).length;
-    const matches=lgMatchSchedule(footballFromEpg(items().filter(i=>i.type==="live"&&allowed(i)),epgGuide()),Date.now(),4);
+    const matches=lgMatchSchedule(footballFromEpg(lgAllowedCatalog().filter(i=>i.type==="live"),epgGuide()),Date.now(),4);
     const register=item=>displayItems.push(item)-1;
     const football=lgFootballHomeMarkup(matches,register);
     const home=lgHomeMarkup({stats:s,favorites:state.favorites.length,recent:recentCount,
@@ -251,7 +251,7 @@ function settings() {
   const selected = activePlaylist();
   const s = stats();
   const audit=selected?.importAudit;
-  const lgImportInfo=lgTv&&selected?'<div class="lg-import-audit" role="status">Playlist: <strong>'+esc(selected.name)+'</strong> · Entradas M3U encontradas: <strong>'+(audit?.declared == null ? "Não disponível" : Number(audit.declared).toLocaleString("pt-BR"))+'</strong> · Importadas: <strong>'+Number(selected.items?.length||0).toLocaleString("pt-BR")+'</strong> · URLs ignoradas: <strong>'+(audit?.invalid == null ? "Não disponível" : Number(audit.invalid).toLocaleString("pt-BR"))+'</strong><p class="muted">Os números correspondem ao arquivo M3U recebido, não à quantidade que o provedor anuncia externamente.</p></div>':'';
+  const lgImportInfo=lgTv&&selected?'<div class="lg-import-audit" role="status">Playlist: <strong>'+esc(selected.name)+'</strong> · Entradas M3U encontradas: <strong>'+(audit?.declared == null ? "Não disponível" : Number(audit.declared).toLocaleString("pt-BR"))+'</strong> · Importadas: <strong>'+Number(selected.items?.length||0).toLocaleString("pt-BR")+'</strong> · URLs ignoradas: <strong>'+(audit?.invalid == null ? "Não disponível" : Number(audit.invalid).toLocaleString("pt-BR"))+'</strong> · URLs duplicadas: <strong>'+(audit?.duplicates == null ? "Não disponível" : Number(audit.duplicates).toLocaleString("pt-BR"))+'</strong><p class="muted">Os números correspondem ao arquivo M3U recebido, não à quantidade que o provedor anuncia externamente.</p></div>':'';
   const lines = state.playlists.map(p => '<div class="playlist-line"><strong>' + esc(p.name) + (p.id===state.activeId ? ' ✓' : '') +
    '</strong><div class="actions"><button class="btn" data-focus="activate-' + esc(p.id) + '" data-action="activate" data-id="' + esc(p.id) + '">Usar</button>' +
    '<button class="btn warn" data-action="delete" data-id="' + esc(p.id) + '" data-focus="delete-' + esc(p.id) + '">Excluir</button></div></div>').join("");
@@ -507,7 +507,7 @@ async function savePlaylist(form) {
     if (!parsed.count) throw new Error("Nenhuma entrada de vídeo válida foi encontrada.");
     const id=(globalThis.crypto?.randomUUID?.() || String(Date.now()));
     await saveCatalog(id,parsed.items);
-    state.playlists.push({id,name,url,items:parsed.items,guideUrl:parsed.guideUrl,guide:null,importAudit:lgTv?{declared:parsed.declared,invalid:parsed.invalid}:null,updatedAt:Date.now(),lastAttemptDay:localDay()});
+    state.playlists.push({id,name,url,items:parsed.items,guideUrl:parsed.guideUrl,guide:null,importAudit:lgTv?{declared:parsed.declared,invalid:parsed.invalid,duplicates:parsed.duplicates}:null,updatedAt:Date.now(),lastAttemptDay:localDay()});
     if(lgTv)invalidateLgCatalog();
     state.activeId=id; notice="Playlist importada: " + parsed.count + " entradas válidas.";
     persist(); render("nav-settings");
@@ -527,7 +527,7 @@ async function refreshActive({quiet=false, playlist=activePlaylist()}={}) {
       playlist.items=merge.items;
     }
     playlist.updatedAt=Date.now();
-    if(lgTv)playlist.importAudit={declared:parsed.declared,invalid:parsed.invalid};
+    if(lgTv)playlist.importAudit={declared:parsed.declared,invalid:parsed.invalid,duplicates:parsed.duplicates};
     if(parsed.guideUrl)playlist.guideUrl=parsed.guideUrl;
     if(!quiet){notice="Atualização concluída: "+merge.added+" itens novos, sem apagar os antigos.";persist();render("nav-settings");}
     else persist();
@@ -701,7 +701,7 @@ async function hydrateCatalogs() {
       if(lgTv) {
         const corrected=reclassifyLgItems(p.items);
         if(corrected){invalidateLgCatalog();await saveCatalog(p.id,p.items);}
-        if(!p.importAudit)p.importAudit={declared:null,invalid:null};
+        if(!p.importAudit)p.importAudit={declared:null,invalid:null,duplicates:null};
       }
       if(p.guide?.programs?.length) await saveGuideDB(p.id,p.guide);
       else p.guide=(await loadGuide(p.id))||null;
