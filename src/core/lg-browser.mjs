@@ -80,60 +80,121 @@ export function lgFacetsFrom(items, field) {
     });
 }
 
-export function lgSeriesGroups(items) {
-  const result=new Map();
-  for(const episode of items.filter(i=>i.type==="series")){
-    const platform=lgPlatform(episode),title=seriesTitle(episode.title);
-    const key=norm(platform)+"|"+norm(title);
-    if(!result.has(key))result.set(key,{
-      key, title, type:"series",platform,group:episode.group,logo:episode.logo,
-      episodes:[],url:episode.url
-    });
-    const s=result.get(key);
-    if(!s.logo && episode.logo)s.logo=episode.logo;
-    s.episodes.push(episode);
+// Indexes stay cached while a playlist array remains unchanged. Never store the
+// index in localStorage/IndexedDB; it is derived from the currently allowed items.
+let indexCache=new WeakMap();
+export function invalidateLgBrowserIndex(items){
+  if(Array.isArray(items))indexCache.delete(items);
+  else indexCache=new WeakMap();
+}
+function indexFor(items){
+  const list=Array.isArray(items)?items:[];
+  let index=indexCache.get(list);
+  if(!index){
+    index={items:list,live:null,movies:null,series:null};
+    indexCache.set(list,index);
   }
-  const episodeNumber=e=>{
-    const a=/(?:^|[\s._-])s(\d{1,3})[\s._-]*e(\d{1,3})/i.exec(e.title) ||
-      /(?:^|[\s._-])(\d{1,3})x(\d{1,3})/i.exec(e.title);
-    return a?Number(a[1])*1000+Number(a[2]):null;
-  };
-  for(const entry of result.values()){
-    entry.episodes.sort((a,b)=>{
+  return index;
+}
+const facetSort=(a,b)=>a.label.localeCompare(b.label,"pt-BR",{numeric:true,sensitivity:"base"});
+const isUnknown=label=>label===PLATFORM_UNKNOWN||label===GENRE_UNKNOWN;
+function facetsFromMap(map){
+  return [...map.entries()].map(([key,values])=>({key,label:key,count:Array.isArray(values)?values.length:values}))
+    .sort((a,b)=>isUnknown(a.key)!==isUnknown(b.key)?isUnknown(a.key)?1:-1:facetSort(a,b));
+}
+function indexLive(index){
+  if(index.live)return index.live;
+  const byPlatform=new Map();
+  for(const item of index.items){
+    if(item.type!=="live")continue;
+    const platform=lgPlatform(item);
+    if(!byPlatform.has(platform))byPlatform.set(platform,[]);
+    byPlatform.get(platform).push(item);
+  }
+  for(const channels of byPlatform.values())channels.sort((a,b)=>
+    a.title.localeCompare(b.title,"pt-BR",{numeric:true}));
+  index.live={byPlatform,platforms:facetsFromMap(byPlatform)};
+  return index.live;
+}
+function indexMovies(index){
+  if(index.movies)return index.movies;
+  const byGenre=new Map();
+  for(const item of index.items){
+    if(item.type!=="movies")continue;
+    const genre=lgGenre(item),platform=lgPlatform(item);
+    if(!byGenre.has(genre))byGenre.set(genre,new Map());
+    const byPlatform=byGenre.get(genre);
+    if(!byPlatform.has(platform))byPlatform.set(platform,[]);
+    byPlatform.get(platform).push(item);
+  }
+  const genres=[...byGenre.entries()].map(([key,platforms])=>({
+    key,label:key,count:[...platforms.values()].reduce((sum,arr)=>sum+arr.length,0)
+  })).sort((a,b)=>isUnknown(a.key)!==isUnknown(b.key)?isUnknown(a.key)?1:-1:facetSort(a,b));
+  index.movies={byGenre,genres};
+  return index.movies;
+}
+function episodeNumber(e){
+  const a=/(?:^|[\s._-])s(\d{1,3})[\s._-]*e(\d{1,3})/i.exec(e.title) ||
+    /(?:^|[\s._-])(\d{1,3})x(\d{1,3})/i.exec(e.title);
+  return a?Number(a[1])*1000+Number(a[2]):null;
+}
+function indexSeries(index){
+  if(index.series)return index.series;
+  const groups=new Map();
+  const byPlatform=new Map();
+  for(const ep of index.items){
+    if(ep.type!=="series")continue;
+    const platform=lgPlatform(ep),title=seriesTitle(ep.title);
+    const key=norm(platform)+"|"+norm(title);
+    if(!groups.has(key)){
+      const show={key,title,type:"series",platform,group:ep.group,logo:ep.logo,episodes:[],url:ep.url};
+      groups.set(key,show);
+      if(!byPlatform.has(platform))byPlatform.set(platform,[]);
+      byPlatform.get(platform).push(show);
+    }
+    const show=groups.get(key);
+    if(!show.logo&&ep.logo)show.logo=ep.logo;
+    show.episodes.push(ep);
+  }
+  for(const show of groups.values()){
+    show.episodes.sort((a,b)=>{
       const A=episodeNumber(a),B=episodeNumber(b);
       return A===null&&B===null?0:A===null?1:B===null?-1:A-B;
     });
   }
-  return [...result.values()].sort((a,b)=>a.title.localeCompare(b.title,"pt-BR"));
+  for(const shows of byPlatform.values())shows.sort((a,b)=>a.title.localeCompare(b.title,"pt-BR",{numeric:true}));
+  const all=[...groups.values()].sort((a,b)=>a.title.localeCompare(b.title,"pt-BR",{numeric:true}));
+  index.series={all,byPlatform,platforms:facetsFromMap(byPlatform)};
+  return index.series;
 }
+export function lgSeriesGroups(items){return indexSeries(indexFor(items)).all;}
 export function lgBrowseModel(route,all,guide,{platform="",channel="",genre="",series=""}={}){
-  const allowed=all||[];
+  const index=indexFor(all);
   if(route==="live"){
-    const content=allowed.filter(i=>i.type==="live");
-    const platforms=lgFacetsFrom(content,lgPlatform);
-    const activePlatform=platforms.some(p=>p.key===platform)?platform:platforms[0]?.key||"";
-    const channels=content.filter(i=>lgPlatform(i)===activePlatform)
-      .sort((a,b)=>a.title.localeCompare(b.title,"pt-BR",{numeric:true}));
+    const source=indexLive(index);
+    const platforms=source.platforms;
+    const activePlatform=source.byPlatform.has(platform)?platform:platforms[0]?.key||"";
+    const channels=source.byPlatform.get(activePlatform)||[];
     const activeChannel=channels.some(c=>c.url===channel)?channel:channels[0]?.url||"";
     const selected=channels.find(c=>c.url===activeChannel)||null;
     return {route,platforms,channels,platform:activePlatform,channel:activeChannel,selected,
       schedule:lgEpgForChannel(selected,guide)};
   }
   if(route==="movies"){
-    const content=allowed.filter(i=>i.type==="movies");
-    const genres=lgFacetsFrom(content,lgGenre);
-    const activeGenre=genres.some(p=>p.key===genre)?genre:genres[0]?.key||"";
-    const byGenre=content.filter(i=>lgGenre(i)===activeGenre);
-    const platforms=lgFacetsFrom(byGenre,lgPlatform);
-    const activePlatform=platforms.some(p=>p.key===platform)?platform:platforms[0]?.key||"";
-    const movies=byGenre.filter(i=>lgPlatform(i)===activePlatform);
+    const source=indexMovies(index);
+    const genres=source.genres;
+    const activeGenre=source.byGenre.has(genre)?genre:genres[0]?.key||"";
+    const byPlatform=source.byGenre.get(activeGenre)||new Map();
+    const platforms=facetsFromMap(byPlatform);
+    const activePlatform=byPlatform.has(platform)?platform:platforms[0]?.key||"";
+    const movies=byPlatform.get(activePlatform)||[];
     return {route,genres,platforms,genre:activeGenre,platform:activePlatform,movies};
   }
   if(route==="series"){
-    const groups=lgSeriesGroups(allowed);
-    const platforms=lgFacetsFrom(groups,x=>x.platform);
-    const activePlatform=platforms.some(p=>p.key===platform)?platform:platforms[0]?.key||"";
-    const shows=groups.filter(g=>g.platform===activePlatform);
+    const source=indexSeries(index);
+    const platforms=source.platforms;
+    const activePlatform=source.byPlatform.has(platform)?platform:platforms[0]?.key||"";
+    const shows=source.byPlatform.get(activePlatform)||[];
     const activeSeries=shows.some(p=>p.key===series)?series:shows[0]?.key||"";
     const selected=shows.find(p=>p.key===activeSeries)||null;
     return {route,platforms,shows,platform:activePlatform,series:activeSeries,selected,episodes:selected?.episodes||[]};
