@@ -118,7 +118,7 @@ export function mergeLgPlaylist(oldItems,newItems){
     positions.set(item.url,list.length);
     list.push({...item});
   }
-  let added=0,updated=0;
+  let added=0,updated=0,changed=0;
   for(const item of newItems||[]){
     if(!item?.url)continue;
     if(positions.has(item.url)){
@@ -131,7 +131,12 @@ export function mergeLgPlaylist(oldItems,newItems){
         genre:item.genre||old.genre
       };
       merged.type=typeFor(merged);
-      list[pos]=merged;
+      // A new daily M3U fetch does not imply metadata changed. Avoid rewriting
+      // large IndexedDB catalog records when the source has no real delta.
+      if(Object.keys(merged).some(key=>merged[key]!==old[key])){
+        list[pos]=merged;
+        changed++;
+      }
       updated++;
     }else{
       const entry={...item,type:typeFor(item)};
@@ -139,5 +144,5 @@ export function mergeLgPlaylist(oldItems,newItems){
       list.push(entry);added++;
     }
   }
-  return {items:list,added,updated};
+  return {items:list,added,updated,changed};
 }
