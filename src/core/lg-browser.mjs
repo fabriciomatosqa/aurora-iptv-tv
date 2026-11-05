@@ -207,6 +207,15 @@ const epgCache=new WeakMap();
 const guideCanon=value=>String(value||"").normalize("NFD")
   .replace(/[\u0300-\u036f]/g,"").toLocaleLowerCase("pt-BR")
   .replace(/[^a-z0-9]+/g," ").trim();
+function withoutTransmissionSuffix(title){
+  let value=String(title||"").replace(/^\[(?:24H|AO VIVO)\]\s*/i,"").trim();
+  const previous=()=>value;
+  const suffix=/(?:\s+(?:FHD|HD|SD|UHD|4K|8K|HEVC|H[.\s-]?265|H[.\s-]?264|ALT)|\s*[\[(](?:FHD|HD|SD|UHD|4K|8K|HEVC|H[.\s-]?265|H[.\s-]?264|ALT)[\])])\s*$/i;
+  let before;
+  do{before=previous();value=value.replace(suffix,"").trim();}while(value!==before);
+  return value;
+}
+
 function indexGuide(guide){
   let index=epgCache.get(guide);
   if(index)return index;
@@ -233,7 +242,14 @@ function lgEpgForChannel(item,guide,now=Date.now()){
   let id=String(item.tvgId||"").trim();
   if(!id||!source.programs.has(id)){
     const exact=source.names.get(guideCanon(item.title))||[];
-    id=exact.length===1?exact[0]:"";
+    if(exact.length===1)id=exact[0];
+    else if(exact.length===0){
+      // LG source titles often append "FHD [H265]". Strip only explicit
+      // quality suffixes; never guess an unrelated channel by fuzzy matching.
+      const stripped=withoutTransmissionSuffix(item.title);
+      const candidates=source.names.get(guideCanon(stripped))||[];
+      id=candidates.length===1?candidates[0]:"";
+    }else id="";
   }
   if(!id)return {now:null,next:[],status:"no-channel"};
   const channel=source.programs.get(id)||[];
