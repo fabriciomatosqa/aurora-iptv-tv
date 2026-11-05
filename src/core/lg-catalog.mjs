@@ -125,6 +125,20 @@ export function auditLgCatalog(items){
 }
 
 
+// Legacy 0.4.x catalogs can already contain repeated URLs. Migrate them
+// without altering the URLs of favorites, resume positions or recent items.
+export function dedupeLgItems(items){
+  const seen=new Set(),unique=[];
+  let removed=0;
+  for(const item of items||[]){
+    if(!item?.url){removed++;continue;}
+    if(seen.has(item.url)){removed++;continue;}
+    seen.add(item.url);
+    unique.push(item);
+  }
+  return {items:removed?unique:items,removed};
+}
+
 // Keep day-old entries offline but update metadata for streams still present.
 // The original shared merger only appended URLs and left corrected M3U labels stale.
 export function mergeLgPlaylist(oldItems,newItems){
