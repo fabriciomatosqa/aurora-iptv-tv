@@ -1,3 +1,7 @@
+> **LG webOS TV 0.5.0 (prévia atual):** código de teste na branch
+> feature/lg-webos-audit-performance-v050; consulte docs/auditoria-tv-2026-11-05.md.
+> A main ainda contém somente README; não representa a versão compilável de TV.
+
 # AURORA IPTV TV — Prévia 0.2.0
 
 Aplicativo independente de IPTV para Smart TVs; sem canais, playlists ou credenciais incluídos.
