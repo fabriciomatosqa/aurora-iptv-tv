@@ -124,3 +124,20 @@ Sem acesso ao M3U/XMLTV completo do usuário não é possível assegurar a class
 ### Como testar
 
 Na branch `feature/lg-webos-catalog-fixes-v041`, execute ou aguarde **Build LG webOS developer IPK**. Baixe `aurora-iptv-tv-lg-simulator-folder` nos Artifacts da execução verde, extraia e escolha a pasta com `appinfo.json` no Simulator 26. Teste A&E e AMC em Ao Vivo, Filmes sem esses canais, plataformas Netflix em Séries, busca de séries distantes e retorno do player para Home.
+
+## LG webOS TV 0.5.0 — revisão técnica e desempenho
+
+Esta versão corrige gargalos de catálogos grandes e adiciona índices temporários por
+plataforma/gênero/série e por canal do XMLTV. Reduz a memória temporária de
+importação M3U, conta URLs repetidas, limpa duplicações antigas e evita
+gravar novamente o catálogo LG no IndexedDB quando nenhuma entrada mudou.
+
+Para testar no LG webOS TV 26 Simulator, use o workflow
+Build LG webOS developer IPK da branch feature/lg-webos-audit-performance-v050.
+Baixe o artefato aurora-iptv-tv-lg-simulator-folder, extraia e abra a
+pasta que contém appinfo.json. O IPK de desenvolvimento vem em artefato separado.
+
+A auditoria detalhada está em docs/auditoria-tv-2026-11-05.md. Não foi
+certificada compatibilidade com codecs em hardware LG real; o registro
+monolítico no IndexedDB ainda precisa evoluir para gravação incremental por item.
+
