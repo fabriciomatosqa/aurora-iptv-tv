@@ -2,7 +2,6 @@
 // Nothing here invents a provider, genre, game, channel, or programme.
 // Every platform/genre must originate in M3U metadata; otherwise use an honest fallback.
 import {seriesTitle} from "./playlist.mjs";
-import {matchGuideChannel} from "./epg.mjs";
 
 const KNOWN_PLATFORMS=[
   "Netflix","Prime Video","Amazon Prime","Disney+","Disney Plus","HBO Max","Max",
@@ -80,60 +79,121 @@ export function lgFacetsFrom(items, field) {
     });
 }
 
-export function lgSeriesGroups(items) {
-  const result=new Map();
-  for(const episode of items.filter(i=>i.type==="series")){
-    const platform=lgPlatform(episode),title=seriesTitle(episode.title);
-    const key=norm(platform)+"|"+norm(title);
-    if(!result.has(key))result.set(key,{
-      key, title, type:"series",platform,group:episode.group,logo:episode.logo,
-      episodes:[],url:episode.url
-    });
-    const s=result.get(key);
-    if(!s.logo && episode.logo)s.logo=episode.logo;
-    s.episodes.push(episode);
+// Indexes stay cached while a playlist array remains unchanged. Never store the
+// index in localStorage/IndexedDB; it is derived from the currently allowed items.
+let indexCache=new WeakMap();
+export function invalidateLgBrowserIndex(items){
+  if(Array.isArray(items))indexCache.delete(items);
+  else indexCache=new WeakMap();
+}
+function indexFor(items){
+  const list=Array.isArray(items)?items:[];
+  let index=indexCache.get(list);
+  if(!index){
+    index={items:list,live:null,movies:null,series:null};
+    indexCache.set(list,index);
   }
-  const episodeNumber=e=>{
-    const a=/(?:^|[\s._-])s(\d{1,3})[\s._-]*e(\d{1,3})/i.exec(e.title) ||
-      /(?:^|[\s._-])(\d{1,3})x(\d{1,3})/i.exec(e.title);
-    return a?Number(a[1])*1000+Number(a[2]):null;
-  };
-  for(const entry of result.values()){
-    entry.episodes.sort((a,b)=>{
+  return index;
+}
+const facetSort=(a,b)=>a.label.localeCompare(b.label,"pt-BR",{numeric:true,sensitivity:"base"});
+const isUnknown=label=>label===PLATFORM_UNKNOWN||label===GENRE_UNKNOWN;
+function facetsFromMap(map){
+  return [...map.entries()].map(([key,values])=>({key,label:key,count:Array.isArray(values)?values.length:values}))
+    .sort((a,b)=>isUnknown(a.key)!==isUnknown(b.key)?isUnknown(a.key)?1:-1:facetSort(a,b));
+}
+function indexLive(index){
+  if(index.live)return index.live;
+  const byPlatform=new Map();
+  for(const item of index.items){
+    if(item.type!=="live")continue;
+    const platform=lgPlatform(item);
+    if(!byPlatform.has(platform))byPlatform.set(platform,[]);
+    byPlatform.get(platform).push(item);
+  }
+  for(const channels of byPlatform.values())channels.sort((a,b)=>
+    a.title.localeCompare(b.title,"pt-BR",{numeric:true}));
+  index.live={byPlatform,platforms:facetsFromMap(byPlatform)};
+  return index.live;
+}
+function indexMovies(index){
+  if(index.movies)return index.movies;
+  const byGenre=new Map();
+  for(const item of index.items){
+    if(item.type!=="movies")continue;
+    const genre=lgGenre(item),platform=lgPlatform(item);
+    if(!byGenre.has(genre))byGenre.set(genre,new Map());
+    const byPlatform=byGenre.get(genre);
+    if(!byPlatform.has(platform))byPlatform.set(platform,[]);
+    byPlatform.get(platform).push(item);
+  }
+  const genres=[...byGenre.entries()].map(([key,platforms])=>({
+    key,label:key,count:[...platforms.values()].reduce((sum,arr)=>sum+arr.length,0)
+  })).sort((a,b)=>isUnknown(a.key)!==isUnknown(b.key)?isUnknown(a.key)?1:-1:facetSort(a,b));
+  index.movies={byGenre,genres};
+  return index.movies;
+}
+function episodeNumber(e){
+  const a=/(?:^|[\s._-])s(\d{1,3})[\s._-]*e(\d{1,3})/i.exec(e.title) ||
+    /(?:^|[\s._-])(\d{1,3})x(\d{1,3})/i.exec(e.title);
+  return a?Number(a[1])*1000+Number(a[2]):null;
+}
+function indexSeries(index){
+  if(index.series)return index.series;
+  const groups=new Map();
+  const byPlatform=new Map();
+  for(const ep of index.items){
+    if(ep.type!=="series")continue;
+    const platform=lgPlatform(ep),title=seriesTitle(ep.title);
+    const key=norm(platform)+"|"+norm(title);
+    if(!groups.has(key)){
+      const show={key,title,type:"series",platform,group:ep.group,logo:ep.logo,episodes:[],url:ep.url};
+      groups.set(key,show);
+      if(!byPlatform.has(platform))byPlatform.set(platform,[]);
+      byPlatform.get(platform).push(show);
+    }
+    const show=groups.get(key);
+    if(!show.logo&&ep.logo)show.logo=ep.logo;
+    show.episodes.push(ep);
+  }
+  for(const show of groups.values()){
+    show.episodes.sort((a,b)=>{
       const A=episodeNumber(a),B=episodeNumber(b);
       return A===null&&B===null?0:A===null?1:B===null?-1:A-B;
     });
   }
-  return [...result.values()].sort((a,b)=>a.title.localeCompare(b.title,"pt-BR"));
+  for(const shows of byPlatform.values())shows.sort((a,b)=>a.title.localeCompare(b.title,"pt-BR",{numeric:true}));
+  const all=[...groups.values()].sort((a,b)=>a.title.localeCompare(b.title,"pt-BR",{numeric:true}));
+  index.series={all,byPlatform,platforms:facetsFromMap(byPlatform)};
+  return index.series;
 }
+export function lgSeriesGroups(items){return indexSeries(indexFor(items)).all;}
 export function lgBrowseModel(route,all,guide,{platform="",channel="",genre="",series=""}={}){
-  const allowed=all||[];
+  const index=indexFor(all);
   if(route==="live"){
-    const content=allowed.filter(i=>i.type==="live");
-    const platforms=lgFacetsFrom(content,lgPlatform);
-    const activePlatform=platforms.some(p=>p.key===platform)?platform:platforms[0]?.key||"";
-    const channels=content.filter(i=>lgPlatform(i)===activePlatform)
-      .sort((a,b)=>a.title.localeCompare(b.title,"pt-BR",{numeric:true}));
+    const source=indexLive(index);
+    const platforms=source.platforms;
+    const activePlatform=source.byPlatform.has(platform)?platform:platforms[0]?.key||"";
+    const channels=source.byPlatform.get(activePlatform)||[];
     const activeChannel=channels.some(c=>c.url===channel)?channel:channels[0]?.url||"";
     const selected=channels.find(c=>c.url===activeChannel)||null;
     return {route,platforms,channels,platform:activePlatform,channel:activeChannel,selected,
       schedule:lgEpgForChannel(selected,guide)};
   }
   if(route==="movies"){
-    const content=allowed.filter(i=>i.type==="movies");
-    const genres=lgFacetsFrom(content,lgGenre);
-    const activeGenre=genres.some(p=>p.key===genre)?genre:genres[0]?.key||"";
-    const byGenre=content.filter(i=>lgGenre(i)===activeGenre);
-    const platforms=lgFacetsFrom(byGenre,lgPlatform);
-    const activePlatform=platforms.some(p=>p.key===platform)?platform:platforms[0]?.key||"";
-    const movies=byGenre.filter(i=>lgPlatform(i)===activePlatform);
+    const source=indexMovies(index);
+    const genres=source.genres;
+    const activeGenre=source.byGenre.has(genre)?genre:genres[0]?.key||"";
+    const byPlatform=source.byGenre.get(activeGenre)||new Map();
+    const platforms=facetsFromMap(byPlatform);
+    const activePlatform=byPlatform.has(platform)?platform:platforms[0]?.key||"";
+    const movies=byPlatform.get(activePlatform)||[];
     return {route,genres,platforms,genre:activeGenre,platform:activePlatform,movies};
   }
   if(route==="series"){
-    const groups=lgSeriesGroups(allowed);
-    const platforms=lgFacetsFrom(groups,x=>x.platform);
-    const activePlatform=platforms.some(p=>p.key===platform)?platform:platforms[0]?.key||"";
-    const shows=groups.filter(g=>g.platform===activePlatform);
+    const source=indexSeries(index);
+    const platforms=source.platforms;
+    const activePlatform=source.byPlatform.has(platform)?platform:platforms[0]?.key||"";
+    const shows=source.byPlatform.get(activePlatform)||[];
     const activeSeries=shows.some(p=>p.key===series)?series:shows[0]?.key||"";
     const selected=shows.find(p=>p.key===activeSeries)||null;
     return {route,platforms,shows,platform:activePlatform,series:activeSeries,selected,episodes:selected?.episodes||[]};
@@ -141,12 +201,65 @@ export function lgBrowseModel(route,all,guide,{platform="",channel="",genre="",s
   throw Error("Unsupported LG route");
 }
 
+// Index XMLTV by channel once per imported guide instead of scanning the
+// entire guide for every selected channel on a low-power webOS TV.
+const epgCache=new WeakMap();
+const guideCanon=value=>String(value||"").normalize("NFD")
+  .replace(/[\u0300-\u036f]/g,"").toLocaleLowerCase("pt-BR")
+  .replace(/[^a-z0-9]+/g," ").trim();
+function withoutTransmissionSuffix(title){
+  let value=String(title||"").replace(/^\[(?:24H|AO VIVO)\]\s*/i,"").trim();
+  const previous=()=>value;
+  const suffix=/(?:\s+(?:FHD|HD|SD|UHD|4K|8K|HEVC|H[.\s-]?265|H[.\s-]?264|ALT)|\s*[\[(](?:FHD|HD|SD|UHD|4K|8K|HEVC|H[.\s-]?265|H[.\s-]?264|ALT)[\])])\s*$/i;
+  let before;
+  do{before=previous();value=value.replace(suffix,"").trim();}while(value!==before);
+  return value;
+}
+
+function indexGuide(guide){
+  let index=epgCache.get(guide);
+  if(index)return index;
+  const programs=new Map(),names=new Map();
+  for(const program of guide.programs||[]){
+    if(!program.channel)continue;
+    if(!programs.has(program.channel))programs.set(program.channel,[]);
+    programs.get(program.channel).push(program);
+  }
+  for(const list of programs.values())list.sort((a,b)=>a.start-b.start);
+  for(const ch of guide.channels||[]){
+    const key=guideCanon(ch.name);
+    if(!key)continue;
+    if(!names.has(key))names.set(key,[]);
+    names.get(key).push(ch.id);
+  }
+  index={programs,names};
+  epgCache.set(guide,index);
+  return index;
+}
 function lgEpgForChannel(item,guide,now=Date.now()){
-  if(!item || !guide?.programs?.length)return {now:null,next:[],status:"no-guide"};
-  const id=matchGuideChannel(item,guide);
+  if(!item||!guide?.programs?.length)return {now:null,next:[],status:"no-guide"};
+  const source=indexGuide(guide);
+  let id=String(item.tvgId||"").trim();
+  if(!id||!source.programs.has(id)){
+    const exact=source.names.get(guideCanon(item.title))||[];
+    if(exact.length===1)id=exact[0];
+    else if(exact.length===0){
+      // LG source titles often append "FHD [H265]". Strip only explicit
+      // quality suffixes; never guess an unrelated channel by fuzzy matching.
+      const stripped=withoutTransmissionSuffix(item.title);
+      const candidates=source.names.get(guideCanon(stripped))||[];
+      id=candidates.length===1?candidates[0]:"";
+    }else id="";
+  }
   if(!id)return {now:null,next:[],status:"no-channel"};
-  const future=guide.programs.filter(x=>x.channel===id && x.stop>now).sort((a,b)=>a.start-b.start);
-  return {now:future.find(x=>x.start<=now&&now<x.stop)||null,next:future.filter(x=>x.start>now).slice(0,15),status:"ok"};
+  const channel=source.programs.get(id)||[];
+  let current=null,upcoming=[];
+  for(const p of channel){
+    if(p.stop<=now)continue;
+    if(p.start<=now && now<p.stop){if(!current)current=p;}
+    else if(p.start>now){upcoming.push(p);if(upcoming.length>=15)break;}
+  }
+  return {now:current,next:upcoming,status:"ok"};
 }
 export {lgEpgForChannel};
 

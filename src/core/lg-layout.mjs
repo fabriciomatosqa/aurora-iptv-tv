@@ -63,7 +63,7 @@ export function lgHomeMarkup({stats,favorites=0,recent=0,playlistName="",esc,has
     '<span class="lg-tile-symbol">'+lgSymbol(tile.icon)+'</span>'+
     '<span class="lg-tile-copy"><span class="lg-tile-name">'+esc(tile.name)+'</span>'+
     '<span class="lg-tile-description">'+esc(tile.caption)+'</span></span>'+
-    '<span class="lg-tile-bottom"><span class="lg-tile-total">'+fmt(tile.count)+' itens</span>'+
+    '<span class="lg-tile-bottom"><span class="lg-tile-total">'+fmt(tile.count)+(Number(tile.count)===1?' item':' itens')+'</span>'+
     '<span class="lg-tile-arrow">'+lgSymbol("arrow")+'</span></span></button>';
   const stamp=new Intl.DateTimeFormat("pt-BR",{weekday:"short",day:"2-digit",month:"short",hour:"2-digit",minute:"2-digit"}).format(date);
   return '<div class="lg-home-shell" role="main">'+

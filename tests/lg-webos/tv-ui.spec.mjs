@@ -179,3 +179,53 @@ test("LG video errors stay inside player and never obstruct Home after going bac
   await page.locator('[data-focus="nav-home"]').click();
   await expect(page.locator(".lg-home-notice")).toHaveCount(0);
 });
+
+test("LG Simulator imports unique URLs only and shows duplicate audit",async({page})=>{
+ await importM3U(page,[
+   entry("Canais | Globoplay","Canal Alpha","https://example.test/one.m3u8"),
+   entry("Canais | Globoplay","Canal Duplicado","https://example.test/one.m3u8"),
+   entry("Canais | Globoplay","Canal Beta","https://example.test/two.m3u8")
+ ],"Lista com duplicatas");
+ await expect(page.locator(".lg-import-audit")).toContainText("URLs duplicadas:");
+ await expect(page.locator(".lg-import-audit")).toContainText("1");
+ await page.locator('[data-focus="nav-live"]').click();
+ await expect(page.locator(".lg-v4-rail").nth(1).locator(".lg-v4-row")).toHaveCount(2);
+ await page.reload();
+ await page.locator('[data-focus="home-live"]').click();
+ await expect(page.locator(".lg-v4-rail").nth(1).locator(".lg-v4-row")).toHaveCount(2);
+});
+test("LG EPG matches HD/H265 channel suffix without wrong fuzzy matches",async({page})=>{
+ await importM3U(page,[
+   entry("Canais | Globoplay","Canal Brasil FHD [H265]","https://example.test/canal.m3u8")
+ ],"Guia por nome compatível");
+ const now=Date.now();
+ const utc=ms=>{
+   const d=new Date(ms);
+   return d.getUTCFullYear()+String(d.getUTCMonth()+1).padStart(2,"0")+
+     String(d.getUTCDate()).padStart(2,"0")+String(d.getUTCHours()).padStart(2,"0")+
+     String(d.getUTCMinutes()).padStart(2,"0")+"00 +0000";
+ };
+ const xml='<tv><channel id="br"><display-name>Canal Brasil</display-name></channel>'+
+   '<programme channel="br" start="'+utc(now-300000)+'" stop="'+utc(now+1800000)+
+   '"><title>Programa autêntico</title></programme></tv>';
+ await page.locator('textarea[name="xml"]').fill(xml);
+ await page.locator("#epg-form").getByRole("button",{name:"Importar programação"}).click();
+ await page.locator('[data-focus="nav-live"]').click();
+ await expect(page.locator(".lg-v4-third")).toContainText("Programa autêntico");
+ await expect(page.locator(".lg-v4-no-epg")).toHaveCount(0);
+});
+test("LG parental PIN keeps adult programs out of Home totals until unlocked",async({page})=>{
+ await importM3U(page,[
+   entry("Canais","TV Livre","https://example.test/live/free.m3u8"),
+   entry("Canais +18","TV Restrita","https://example.test/live/restricted.m3u8")
+ ],"Playlist com controle");
+ await page.locator('[data-focus="nav-home"]').click();
+ await expect(page.locator(".lg-tile-live .lg-tile-total")).toContainText("1 item");
+ await page.locator('[data-focus="nav-settings"]').click();
+ await page.locator("#pin-create input[name='pin']").fill("2419");
+ await page.locator("#pin-create").getByRole("button",{name:/Ativar proteção/}).click();
+ await page.locator('[data-focus="nav-home"]').click();
+ await expect(page.locator(".lg-tile-live .lg-tile-total")).toContainText("2 itens");
+ await page.reload();
+ await expect(page.locator(".lg-tile-live .lg-tile-total")).toContainText("1 item");
+});

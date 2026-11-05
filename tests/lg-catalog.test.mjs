@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import {parseLgM3U,reclassifyLgItems,auditLgCatalog,mergeLgPlaylist,classifyLgItem} from "../src/core/lg-catalog.mjs";
+import {parseLgM3U,reclassifyLgItems,auditLgCatalog,mergeLgPlaylist,classifyLgItem,dedupeLgItems} from "../src/core/lg-catalog.mjs";
 const prefix="#EXTM3U\n";
 test("LG importer never caps entries at 180",()=>{
   const rows=[];
@@ -74,4 +74,56 @@ test("LG refresh replaces old metadata for identical URLs and retains offline en
   assert.equal(merged.items[0].tvgId,"amc");
   assert.equal(merged.items[0].logo,"https://example.test/old.png");
   assert.equal(merged.items[1].title,"Offline");
+});
+
+test("LG initial M3U import ignores duplicate URLs and reports the count",()=>{
+ const src='#EXTM3U\n#EXTINF:-1 group-title="Canais",Canal Um\nhttps://example.test/stream.m3u8\n'+
+   '#EXTINF:-1 group-title="Filmes",Outra etiqueta para o mesmo URL\nhttps://example.test/stream.m3u8\n'+
+   '#EXTINF:-1 group-title="Filmes",Filme\nhttps://example.test/movie/123.mp4\n';
+ const result=parseLgM3U(src);
+ assert.equal(result.declared,3);
+ assert.equal(result.count,2);
+ assert.equal(result.duplicates,1);
+ assert.equal(result.invalid,0);
+ assert.deepEqual(result.items.map(x=>x.type),["live","movies"]);
+});
+test("LG large M3U parser preserves all 12,000 distinct entries without truncation",()=>{
+ const src=['#EXTM3U'];
+ for(let i=0;i<12000;i++)src.push(
+   '#EXTINF:-1 tvg-id="C'+i+'" group-title="Canais",Canal '+i,
+   'https://example.test/live/'+i+'.m3u8');
+ const parsed=parseLgM3U(src.join('\r\n'));
+ assert.equal(parsed.count,12000);
+ assert.equal(parsed.declared,12000);
+ assert.equal(parsed.duplicates,0);
+ assert.equal(parsed.items.at(-1).title,"Canal 11999");
+});
+test("LG identical daily refresh has zero changes and does not require a catalog rewrite",()=>{
+ const base=[{url:"https://example.test/live/1",title:"C1",group:"Canais",
+   type:"live",logo:"",tvgId:"",platform:"",genre:""}];
+ const result=mergeLgPlaylist(base,base.map(i=>({...i})));
+ assert.equal(result.added,0);
+ assert.equal(result.changed,0);
+ assert.equal(result.updated,1);
+ assert.deepEqual(result.items,base);
+ assert.strictEqual(base[0].title,"C1");
+ const modified=mergeLgPlaylist(base,[{...base[0],logo:"https://example.test/logo.png"}]);
+ assert.equal(modified.changed,1);
+ assert.equal(modified.added,0);
+ assert.equal(modified.items[0].logo,"https://example.test/logo.png");
+});
+
+test("LG migration deduplicates old cache but never alters favorite/position URL",()=>{
+  const older=[
+    {url:"https://example.test/one",title:"A",type:"live",group:"Canais"},
+    {url:"https://example.test/one",title:"A duplicado",type:"live",group:"Canais"},
+    {url:"https://example.test/two",title:"B",type:"live",group:"Canais"}
+  ];
+  const result=dedupeLgItems(older);
+  assert.equal(result.removed,1);
+  assert.equal(result.items.length,2);
+  assert.equal(result.items[0].url,older[0].url);
+  assert.equal(result.items[1].url,older[2].url);
+  assert.equal(older.length,3);
+  assert.strictEqual(dedupeLgItems(result.items).items,result.items);
 });

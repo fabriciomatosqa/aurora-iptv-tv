@@ -1,5 +1,17 @@
 # Registro de alterações — AURORA IPTV TV
 
+## 0.5.0 — LG webOS: revisão técnica e desempenho (05/11/2026)
+
+- Análise das plataformas e testes documentada em docs/auditoria-tv-2026-11-05.md.
+- Cache de índices dos conteúdos de Ao Vivo, Filmes e Séries e EPG por canal para reduzir trabalho repetido a cada seleção.
+- Leitura M3U com menor alocação temporária; controle de URLs duplicadas na importação e migração de caches antigos.
+- Atualização diária LG detecta quando houve mudança efetiva de metadados: sem novidades, não regrava o catálogo no IndexedDB.
+- Correspondência segura do EPG para canais identificados com HD, FHD, H265 e ALT, apenas quando única.
+- Contadores da Home respeitam o bloqueio parental; correção de pluralização.
+- Testes para 12 mil itens, fontes EPG, favoritos, duplicatas, controles parentais e interface LG.
+- Sem mudanças visuais/funcionais intencionais em Android TV, Tizen e VIDAA. Ainda requer validação física e importação em fluxo para catálogos muito grandes.
+
+
 ## 0.2.0 — Prévia de desenvolvimento
 
 - Estrutura multiplataforma e interface TV-first com menu SVG e foco por controle remoto.
