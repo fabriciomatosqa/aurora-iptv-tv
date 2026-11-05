@@ -52,14 +52,26 @@ function unquotedComma(line){
   }
   return -1;
 }
+// Avoid splitting a very large M3U into an extra full array of lines on TVs.
+function* m3uLines(text){
+  let start=0;
+  while(start<text.length){
+    const end=text.indexOf("\n",start);
+    if(end<0){yield text.slice(start);break;}
+    const last=end>start&&text[end-1]==="\r"?end-1:end;
+    yield text.slice(start,last);
+    start=end+1;
+  }
+}
 export function parseLgM3U(text){
   if(typeof text!=="string"||!text.trimStart().startsWith("#EXTM3U"))
     throw Error("A playlist precisa começar com #EXTM3U.");
-  const items=[];
-  let pending=null,groupOverride="",declared=0,invalid=0;
-  const first=text.split(/\r?\n/,1)[0];
+  const items=[],seen=new Set();
+  let pending=null,groupOverride="",declared=0,invalid=0,duplicates=0;
+  const endOfHeader=text.indexOf("\n");
+  const first=endOfHeader<0?text:text.slice(0,endOfHeader);
   const guideUrl=/(?:x-tvg-url|url-tvg)=["']([^"']*)["']/i.exec(first)?.[1]||"";
-  for(const raw of text.split(/\r?\n/)){
+  for(const raw of m3uLines(text)){
     const line=raw.trim();
     if(line.startsWith("#EXTINF:")){
       declared++;
@@ -86,15 +98,19 @@ export function parseLgM3U(text){
       try{
         const url=new URL(line);
         if(!["http:","https:"].includes(url.protocol))throw Error("unsupported");
-        const item={...pending,url:line,type:"unknown"};
-        item.type=typeFor(item);
-        items.push(item);
+        if(seen.has(line))duplicates++;
+        else{
+          const item={...pending,url:line,type:"unknown"};
+          item.type=typeFor(item);
+          items.push(item);
+          seen.add(line);
+        }
       }catch{invalid++;}
       pending=null;
     }
   }
   if(pending)invalid++;
-  return {items,count:items.length,declared,invalid,guideUrl};
+  return {items,count:items.length,declared,invalid,duplicates,guideUrl};
 }
 export function auditLgCatalog(items){
   const result={all:0,live:0,movies:0,series:0,unknown:0,episodes:0};
