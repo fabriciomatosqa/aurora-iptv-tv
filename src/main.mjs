@@ -8,7 +8,7 @@ import {remoteKey,registerRemoteKeys} from "./core/remote.mjs";
 import {hasTizenPlayer,startTizenPlayer,tizenPositionSeconds,toggleTizenPlayback,seekTizen,stopTizenPlayer} from "./core/tizen-player.mjs";
 import {loadCatalog,saveCatalog,loadGuide,saveGuide as saveGuideDB,deletePlaylistData} from "./core/catalog-db.mjs";
 import { focusFirst, restoreFocus, nextFocus } from "./core/focus.mjs";
-import {parseLgM3U,reclassifyLgItems,auditLgCatalog,mergeLgPlaylist} from "./core/lg-catalog.mjs";
+import {parseLgM3U,reclassifyLgItems,auditLgCatalog,mergeLgPlaylist,dedupeLgItems} from "./core/lg-catalog.mjs";
 import {LG_LIBRARY_ROUTES, lgHomeMarkup, lgSecondaryMarkup, lgGroupKey, lgFacets} from "./core/lg-layout.mjs";
 import {lgBrowseModel,lgSeriesGroups,lgMatchSchedule,invalidateLgBrowserIndex} from "./core/lg-browser.mjs";
 import {lgRail,lgBrowserHeader,lgEpgMarkup,lgMovieMarkup,lgEpisodesMarkup,lgFootballHomeMarkup} from "./core/lg-browser-view.mjs";
@@ -699,9 +699,12 @@ async function hydrateCatalogs() {
       if(Array.isArray(p.items) && p.items.length) await saveCatalog(p.id,p.items);
       else p.items=(await loadCatalog(p.id))||[];
       if(lgTv) {
+        const unique=dedupeLgItems(p.items);
+        if(unique.removed)p.items=unique.items;
         const corrected=reclassifyLgItems(p.items);
-        if(corrected){invalidateLgCatalog();await saveCatalog(p.id,p.items);}
+        if(corrected||unique.removed){invalidateLgCatalog();await saveCatalog(p.id,p.items);}
         if(!p.importAudit)p.importAudit={declared:null,invalid:null,duplicates:null};
+        if(unique.removed)p.importAudit.migratedDuplicates=(Number(p.importAudit.migratedDuplicates)||0)+unique.removed;
       }
       if(p.guide?.programs?.length) await saveGuideDB(p.id,p.guide);
       else p.guide=(await loadGuide(p.id))||null;
