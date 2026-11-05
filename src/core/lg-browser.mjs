@@ -2,7 +2,6 @@
 // Nothing here invents a provider, genre, game, channel, or programme.
 // Every platform/genre must originate in M3U metadata; otherwise use an honest fallback.
 import {seriesTitle} from "./playlist.mjs";
-import {matchGuideChannel} from "./epg.mjs";
 
 const KNOWN_PLATFORMS=[
   "Netflix","Prime Video","Amazon Prime","Disney+","Disney Plus","HBO Max","Max",
@@ -202,12 +201,49 @@ export function lgBrowseModel(route,all,guide,{platform="",channel="",genre="",s
   throw Error("Unsupported LG route");
 }
 
+// Index XMLTV by channel once per imported guide instead of scanning the
+// entire guide for every selected channel on a low-power webOS TV.
+const epgCache=new WeakMap();
+const guideCanon=value=>String(value||"").normalize("NFD")
+  .replace(/[\u0300-\u036f]/g,"").toLocaleLowerCase("pt-BR")
+  .replace(/[^a-z0-9]+/g," ").trim();
+function indexGuide(guide){
+  let index=epgCache.get(guide);
+  if(index)return index;
+  const programs=new Map(),names=new Map();
+  for(const program of guide.programs||[]){
+    if(!program.channel)continue;
+    if(!programs.has(program.channel))programs.set(program.channel,[]);
+    programs.get(program.channel).push(program);
+  }
+  for(const list of programs.values())list.sort((a,b)=>a.start-b.start);
+  for(const ch of guide.channels||[]){
+    const key=guideCanon(ch.name);
+    if(!key)continue;
+    if(!names.has(key))names.set(key,[]);
+    names.get(key).push(ch.id);
+  }
+  index={programs,names};
+  epgCache.set(guide,index);
+  return index;
+}
 function lgEpgForChannel(item,guide,now=Date.now()){
-  if(!item || !guide?.programs?.length)return {now:null,next:[],status:"no-guide"};
-  const id=matchGuideChannel(item,guide);
+  if(!item||!guide?.programs?.length)return {now:null,next:[],status:"no-guide"};
+  const source=indexGuide(guide);
+  let id=String(item.tvgId||"").trim();
+  if(!id||!source.programs.has(id)){
+    const exact=source.names.get(guideCanon(item.title))||[];
+    id=exact.length===1?exact[0]:"";
+  }
   if(!id)return {now:null,next:[],status:"no-channel"};
-  const future=guide.programs.filter(x=>x.channel===id && x.stop>now).sort((a,b)=>a.start-b.start);
-  return {now:future.find(x=>x.start<=now&&now<x.stop)||null,next:future.filter(x=>x.start>now).slice(0,15),status:"ok"};
+  const channel=source.programs.get(id)||[];
+  let current=null,upcoming=[];
+  for(const p of channel){
+    if(p.stop<=now)continue;
+    if(p.start<=now && now<p.stop){if(!current)current=p;}
+    else if(p.start>now){upcoming.push(p);if(upcoming.length>=15)break;}
+  }
+  return {now:current,next:upcoming,status:"ok"};
 }
 export {lgEpgForChannel};
 
