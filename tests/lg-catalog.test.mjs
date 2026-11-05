@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import {parseLgM3U,reclassifyLgItems,auditLgCatalog,mergeLgPlaylist,classifyLgItem} from "../src/core/lg-catalog.mjs";
+import {parseLgM3U,reclassifyLgItems,auditLgCatalog,mergeLgPlaylist,classifyLgItem,dedupeLgItems} from "../src/core/lg-catalog.mjs";
 const prefix="#EXTM3U\n";
 test("LG importer never caps entries at 180",()=>{
   const rows=[];
@@ -111,4 +111,19 @@ test("LG identical daily refresh has zero changes and does not require a catalog
  assert.equal(modified.changed,1);
  assert.equal(modified.added,0);
  assert.equal(modified.items[0].logo,"https://example.test/logo.png");
+});
+
+test("LG migration deduplicates old cache but never alters favorite/position URL",()=>{
+  const older=[
+    {url:"https://example.test/one",title:"A",type:"live",group:"Canais"},
+    {url:"https://example.test/one",title:"A duplicado",type:"live",group:"Canais"},
+    {url:"https://example.test/two",title:"B",type:"live",group:"Canais"}
+  ];
+  const result=dedupeLgItems(older);
+  assert.equal(result.removed,1);
+  assert.equal(result.items.length,2);
+  assert.equal(result.items[0].url,older[0].url);
+  assert.equal(result.items[1].url,older[2].url);
+  assert.equal(older.length,3);
+  assert.strictEqual(dedupeLgItems(result.items).items,result.items);
 });
