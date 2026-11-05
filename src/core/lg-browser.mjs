@@ -1,7 +1,6 @@
 // LG webOS-only three-column browser data model.
 // Nothing here invents a provider, genre, game, channel, or programme.
 // Every platform/genre must originate in M3U metadata; otherwise use an honest fallback.
-import {seriesTitle} from "./playlist.mjs";
 
 const KNOWN_PLATFORMS=[
   "Netflix","Prime Video","Amazon Prime","Disney+","Disney Plus","HBO Max","Max",
@@ -18,49 +17,82 @@ const GENRES=[
   "Guerra","Faroeste","Esportes","Religioso","Dorama","Doramas"
 ];
 const PLATFORM_UNKNOWN="Plataforma não informada";
+const CATEGORY_PREFIX="Categoria da lista: ";
+const CATEGORY_UNKNOWN="Categoria não informada";
 const GENRE_UNKNOWN="Gênero não informado";
 const text=value=>String(value??"").trim();
 const norm=value=>text(value).normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLocaleLowerCase("pt-BR");
+// IPTV playlists use many decorative Unicode symbols before service names.
+// Normalize only group metadata, never infer a provider from a media title.
 const cleanToken=value=>text(value)
-  .replace(/^[\s\u2666\u25c6\u2726\u2727\u2605\u2606\u2022\u00b7+\-|:\/]+/g,"")
-  .replace(/[\s\u2666\u25c6\u2726\u2727\u2605\u2606\u2022\u00b7|:\/]+$/g,"").trim();
-const tokens=group=>text(group)
-  .split(/\s*(?:\||\/|›|»| > | :: | : )\s*/)
-  .map(cleanToken).filter(Boolean);
-function matches(candidate,options){
-  const value=norm(cleanToken(candidate));
-  return options.find(x=>norm(x)===value)||"";
+  .replace(/^[^\p{L}\p{N}]+/u,"")
+  .replace(/[^\p{L}\p{N}+]+$/u,"").trim();
+const tokens=group=>text(group).split(/\s*(?:\||\/|›|»| > | :: | : )\s*/).map(cleanToken).filter(Boolean);
+const KIND=/^(?:filmes?|movies?|vod|s[eé]ries?|series|canais?|ao vivo|live tv|tv|plataformas?|g[eê]neros?|categorias?|fhd|hd|sd|uhd|4k|dublado|legendado|dual audio)$/i;
+function matches(candidate,options) {
+  const token=norm(cleanToken(candidate));
+  return options.find(option=>norm(option)===token)||"";
 }
 function findFromGroup(group,options) {
+  const sorted=[...options].sort((a,b)=>b.length-a.length);
   for(const segment of tokens(group)){
-    const direct=matches(segment,options);
-    if(direct)return direct;
-    // Metadata strings such as "SÉRIES NETFLIX" or "NETFLIX - SÉRIES".
-    // Only accept an exact known platform/genre after removing a category label.
-    const bare=norm(segment).replace(/[()[\]]/g," ").replace(/\s+/g," ").trim();
-    const kinds=["filmes","filme","movies","movie","vod","series","serie","canais","canal",
-      "ao vivo","live tv","plataforma","plataformas","generos","genero","categoria","categorias"];
-    for(const option of options) {
-      const label=norm(option);
-      for(const kind of kinds){
-        if(bare===kind+" "+label || bare===label+" "+kind ||
-           bare===kind+" - "+label || bare===label+" - "+kind)return option;
+    const exact=matches(segment,sorted);
+    if(exact)return exact;
+    const textValue=norm(segment).replace(/[()[\]]/g," ").replace(/\s+/g," ").trim();
+    // E.g. "SÉRIES - NETFLIX", "Netflix [Séries]", "Filmes Drama".
+    // Require a recognized category at the edge, never scan content titles.
+    for(const option of sorted){
+      const service=norm(option);
+      for(const kind of ["filmes","filme","movies","movie","vod","series","serie","canais","canal",
+        "ao vivo","live tv","plataforma","plataformas","generos","genero","categoria","categorias",
+        "dublado","legendado"]){
+        if([kind+" "+service,service+" "+kind,kind+" - "+service,service+" - "+kind].includes(textValue))
+          return option;
+      }
+      // Some providers use decorative badges between the category and source.
+      if(textValue.endsWith(" "+service)){
+        const prefix=textValue.slice(0,-service.length).replace(/[-–—\s]+$/g,"");
+        if(KIND.test(prefix))return option;
       }
     }
   }
   return "";
 }
-function findPlatform(item) {
+function findPlatform(item){
   const explicit=cleanToken(item?.platform||item?.provider||"");
   if(explicit)return explicit;
-  // Never extract a streaming provider from the title of a movie or episode.
   return findFromGroup(item?.group,KNOWN_PLATFORMS)||PLATFORM_UNKNOWN;
 }
-function findGenre(item) {
+function findGenre(item){
   const explicit=cleanToken(item?.genre||item?.category||"");
   if(explicit)return explicit;
   return findFromGroup(item?.group,GENRES)||GENRE_UNKNOWN;
 }
+// Fallback categories are taken literally from the provider's own group-title.
+// They are not relabeled as streaming platforms.
+export function lgSourceCategory(item){
+  const groups=tokens(item?.group||"");
+  const relevant=groups.filter(part=>!KIND.test(part) && !matches(part,KNOWN_PLATFORMS) &&
+    !matches(part,GENRES));
+  if(!relevant.length)return CATEGORY_UNKNOWN;
+  return relevant[relevant.length-1].slice(0,90);
+}
+export function lgSourceBucket(item){
+  const platform=findPlatform(item);
+  if(platform!==PLATFORM_UNKNOWN)return platform;
+  const category=lgSourceCategory(item);
+  return category===CATEGORY_UNKNOWN?PLATFORM_UNKNOWN:CATEGORY_PREFIX+category;
+}
+export function lgIsCategoryBucket(label){return String(label||"").startsWith(CATEGORY_PREFIX);}
+export {CATEGORY_PREFIX};
+export function lgSeriesTitle(title){
+  const value=text(title).replace(/^\s*(?:\[24H\]\s*)/i,"");
+  const pattern=/(?:^|[\s._–-])(?:s(?:eason)?\s*\d{1,3}[\s._-]*e(?:p(?:is[oó]dio)?)?\s*\d{1,3}|\d{1,3}\s*x\s*\d{1,3}|t(?:emporada)?\s*\d{1,3}\s*[-._ ]*\s*(?:e|ep|epis[oó]dio)\s*\d{1,3})(?:\b|(?=[\s._-]))/i;
+  const match=pattern.exec(value);
+  const base=match?value.slice(0,match.index):value;
+  return (base.replace(/\s*[\[(](?:L|D|LEG|DUB|FHD|HD)[\])]\s*$/i,"").replace(/[-–._\s]+$/g,"").trim()||value);
+}
+
 export const lgPlatform=item=>findPlatform(item);
 export const lgGenre=item=>findGenre(item);
 export {PLATFORM_UNKNOWN,GENRE_UNKNOWN};
@@ -106,7 +138,7 @@ function indexLive(index){
   const byPlatform=new Map();
   for(const item of index.items){
     if(item.type!=="live")continue;
-    const platform=lgPlatform(item);
+    const platform=lgSourceBucket(item);
     if(!byPlatform.has(platform))byPlatform.set(platform,[]);
     byPlatform.get(platform).push(item);
   }
@@ -143,7 +175,7 @@ function indexSeries(index){
   const byPlatform=new Map();
   for(const ep of index.items){
     if(ep.type!=="series")continue;
-    const platform=lgPlatform(ep),title=seriesTitle(ep.title);
+    const platform=lgSourceBucket(ep),title=lgSeriesTitle(ep.title);
     const key=norm(platform)+"|"+norm(title);
     if(!groups.has(key)){
       const show={key,title,type:"series",platform,group:ep.group,logo:ep.logo,episodes:[],url:ep.url};
