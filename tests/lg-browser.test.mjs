@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import {lgBrowseModel,lgPlatform,lgGenre,lgSeriesGroups,lgEpgForChannel,lgMatchSchedule,PLATFORM_UNKNOWN,GENRE_UNKNOWN} from "../src/core/lg-browser.mjs";
+import {lgBrowseModel,lgPlatform,lgGenre,lgSeriesGroups,lgEpgForChannel,lgMatchSchedule,invalidateLgBrowserIndex,PLATFORM_UNKNOWN,GENRE_UNKNOWN} from "../src/core/lg-browser.mjs";
 import {lgEpgMarkup,lgRail,lgMovieMarkup,lgEpisodesMarkup,lgFootballHomeMarkup} from "../src/core/lg-browser-view.mjs";
 
 const E=String.raw;
@@ -100,4 +100,43 @@ test("LG legacy unknown sources remain accessible for manual classification",()=
   const model=lgBrowseModel("movies",items,null,{});
   assert.equal(model.movies.length,1);
   assert.equal(model.movies[0].title,"Only one");
+});
+
+test("LG large series catalog is indexed once and reused during repeated navigation",()=>{
+  const items=Array.from({length:12000},(_,i)=>series("Programa "+(i%400)+" S01E"+String(Math.floor(i/400)+1).padStart(2,"0"),"Séries | Netflix"));
+  const first=lgBrowseModel("series",items,null,{platform:"Netflix"});
+  const second=lgBrowseModel("series",items,null,{platform:"Netflix",series:first.shows[399].key});
+  assert.strictEqual(first.shows,second.shows);
+  assert.equal(first.shows.length,400);
+  assert.equal(second.episodes.length,30);
+  assert.strictEqual(lgSeriesGroups(items),lgSeriesGroups(items));
+  items.push(series("Nova Série S01E01","Séries | Netflix"));
+  invalidateLgBrowserIndex(items);
+  assert.equal(lgBrowseModel("series",items,null,{}).shows.length,401);
+});
+test("LG repeated live and film navigation reuses indexed categories",()=>{
+  const all=[...Array.from({length:900},(_,i)=>live("C "+i,"Canais | Globoplay")),
+    ...Array.from({length:1500},(_,i)=>film("F "+i,"Filmes | Ação | Netflix"))];
+  const a=lgBrowseModel("live",all,null,{platform:"Globoplay"});
+  const b=lgBrowseModel("live",all,null,{platform:"Globoplay",channel:a.channels[350].url});
+  assert.strictEqual(a.channels,b.channels);
+  assert.equal(a.channels.length,900);
+  const m=lgBrowseModel("movies",all,null,{genre:"Ação",platform:"Netflix"});
+  const m2=lgBrowseModel("movies",all,null,{genre:"Ação",platform:"Netflix"});
+  assert.strictEqual(m.movies,m2.movies);
+  assert.equal(m.movies.length,1500);
+});
+test("LG exact EPG index strips channel quality suffixes only when match is unique",()=>{
+  const now=Date.now();
+  const guide={channels:[{id:"canalbr",name:"Canal Brasil"}],
+    programs:[{channel:"canalbr",title:"Programa Agora",start:now-120000,stop:now+120000},
+      {channel:"canalbr",title:"Programa Depois",start:now+120000,stop:now+3600000}]};
+  const result=lgEpgForChannel(live("Canal Brasil FHD [H265]","Canais"),guide,now);
+  assert.equal(result.now.title,"Programa Agora");
+  assert.equal(result.next[0].title,"Programa Depois");
+  assert.equal(lgEpgForChannel(live("Canal Brasil HD [ALT]","Canais"),guide,now).status,"ok");
+  assert.equal(lgEpgForChannel(live("Brasil TV HD","Canais"),guide,now).status,"no-channel");
+  const duplicated={channels:[{id:"a",name:"Canal Brasil"},{id:"b",name:"Canal Brasil"}],
+    programs:[{channel:"a",title:"A",start:now-100,stop:now+100},{channel:"b",title:"B",start:now-100,stop:now+100}]};
+  assert.equal(lgEpgForChannel(live("Canal Brasil FHD","Canais"),duplicated,now).status,"no-channel");
 });
