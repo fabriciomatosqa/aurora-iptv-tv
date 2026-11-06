@@ -1,5 +1,5 @@
 import {lgSymbol} from "./lg-layout.mjs";
-import {lgEpisodeParts} from "./lg-browser.mjs";
+import {lgEpisodeParts,lgDisplayBucket} from "./lg-browser.mjs";
 // Semantic LG-only rendering: three columns, no media catalogue data invented.
 const safe=(v)=>String(v??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 const n=v=>Number(v||0).toLocaleString("pt-BR");
@@ -70,7 +70,7 @@ export function lgEpgMarkup(model,register){
     '</div><p class="lg-v5-preview-hint">Selecione o canal para assistir à prévia. Pressione OK na imagem para abrir em tela cheia.</p>'+
     '</section>';
   return '<div class="lg-v4-third-title"><span class="lg-v4-overline">CANAL SELECIONADO</span>'+
-    '<h2>'+safe(selected.title)+'</h2><p>'+safe(model.platform)+'</p></div>'+
+    '<h2>'+safe(selected.title)+'</h2><p>'+safe(lgDisplayBucket(model.platform))+'</p></div>'+
     preview+'<h3 class="lg-v4-section-label">'+lgSymbol("guide","lg-v5-section-icon")+' Guia de programação</h3>'+
     (!schedule.now&&!schedule.next.length?
       '<div class="lg-v4-no-epg"><span class="lg-v4-no-epg-icon">'+lgSymbol("guide","lg-v5-empty-icon")+'</span><h4>Programação indisponível</h4>'+
@@ -85,7 +85,7 @@ export function lgMovieMarkup(model,cards,query=""){
     String(item.title||"").normalize("NFD").replace(/[\u0300-\u036f]/g,"")
       .toLocaleLowerCase("pt-BR").includes(normalized)):model.movies;
   const genre=model.genre==="Gênero não informado"?"Outros filmes":model.genre;
-  const platform=model.platform==="Plataforma não informada"?"Sem plataforma definida":model.platform;
+  const platform=model.platform==="Plataforma não informada"?"Da sua lista":lgDisplayBucket(model.platform);
   return '<div class="lg-v4-third-title lg-v5-movie-heading"><span class="lg-v4-overline">BIBLIOTECA DE FILMES</span>'+
    '<h2>'+safe(genre)+'</h2><p>'+safe(platform)+' · '+n(model.movies.length)+' títulos disponíveis</p></div>'+
    (model.movies.length>6?'<label class="lg-v5-movie-search-label" for="lg-movie-search">'+
@@ -100,7 +100,7 @@ export function lgEpisodesMarkup(model,register,favoriteKey,isFavorite){
   const entry=model.selected;
   let lastSeason=null;
   return '<div class="lg-v4-third-title"><span class="lg-v4-overline">SÉRIE SELECIONADA</span><h2>'+safe(entry.title)+'</h2>'+
-    '<p>'+n(model.episodes.length)+' episódios · '+safe(model.platform)+'</p></div>'+
+    '<p>'+n(model.episodes.length)+' episódios · '+safe(lgDisplayBucket(model.platform))+'</p></div>'+
     '<button type="button" class="lg-v4-favorite" data-action="lg-series-favorite" data-focus="lg-series-favorite">'+
       lgSymbol("favorites","lg-v5-inline-icon")+(isFavorite?" Remover dos favoritos":" Favoritar série")+'</button>'+
     '<h3 class="lg-v4-section-label">Episódios</h3>'+
