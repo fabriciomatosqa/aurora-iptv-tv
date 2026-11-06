@@ -72,8 +72,7 @@ function findGenre(item){
 // They are not relabeled as streaming platforms.
 export function lgSourceCategory(item){
   const groups=tokens(item?.group||"");
-  const relevant=groups.filter(part=>!KIND.test(part) && !matches(part,KNOWN_PLATFORMS) &&
-    !matches(part,GENRES));
+  const relevant=groups.filter(part=>!KIND.test(part) && !matches(part,KNOWN_PLATFORMS));
   if(!relevant.length)return CATEGORY_UNKNOWN;
   return relevant[relevant.length-1].slice(0,90);
 }
