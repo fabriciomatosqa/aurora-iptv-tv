@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import {lgBrowseModel,lgPlatform,lgGenre,lgSeriesGroups,lgEpgForChannel,lgMatchSchedule,invalidateLgBrowserIndex,PLATFORM_UNKNOWN,GENRE_UNKNOWN} from "../src/core/lg-browser.mjs";
+import {lgBrowseModel,lgPlatform,lgGenre,lgSourceCategory,lgSourceBucket,lgSeriesTitle,lgSeriesGroups,lgEpgForChannel,lgMatchSchedule,invalidateLgBrowserIndex,PLATFORM_UNKNOWN,GENRE_UNKNOWN} from "../src/core/lg-browser.mjs";
 import {lgEpgMarkup,lgRail,lgMovieMarkup,lgEpisodesMarkup,lgFootballHomeMarkup} from "../src/core/lg-browser-view.mjs";
 
 const E=String.raw;
@@ -139,4 +139,70 @@ test("LG exact EPG index strips channel quality suffixes only when match is uniq
   const duplicated={channels:[{id:"a",name:"Canal Brasil"},{id:"b",name:"Canal Brasil"}],
     programs:[{channel:"a",title:"A",start:now-100,stop:now+100},{channel:"b",title:"B",start:now-100,stop:now+100}]};
   assert.equal(lgEpgForChannel(live("Canal Brasil FHD","Canais"),duplicated,now).status,"no-channel");
+});
+
+test("LG metadata handles Unicode-decorated source platforms without taking them from titles",()=>{
+  const cases=[
+    ["♦ Netflix","Netflix"],
+    ["✧ Netflix","Netflix"],
+    ["✦ Crunchyroll","Crunchyroll"],
+    ["♥ Disney+","Disney+"],
+    ["SÉRIES | ✿ HBO Max","HBO Max"],
+    ["SÉRIES - Prime Video","Prime Video"],
+    ["✦ Apple TV+","Apple TV+"]
+  ];
+  for(const [group,expected] of cases){
+    assert.equal(lgPlatform(series("Uma Série S01E01",group)),expected,group);
+  }
+  assert.equal(lgPlatform(series("Netflix: Documentário S01E01","Séries")),PLATFORM_UNKNOWN);
+});
+
+test("LG derives real group-title categories when no actual streaming service is provided",()=>{
+  const entries=[
+    live("Canal Esporte","Canais | Esportes"),
+    live("Canal Notícias","Canais | Notícias"),
+    live("Canal Sem Grupo","Canais"),
+    series("Seriado A S01E01","Séries | Doramas"),
+    series("Seriado B S01E01","Séries | Animação")
+  ];
+  assert.equal(lgPlatform(entries[0]),PLATFORM_UNKNOWN);
+  assert.equal(lgSourceCategory(entries[0]),"Esportes");
+  assert.equal(lgSourceCategory(entries[1]),"Notícias");
+  assert.equal(lgSourceBucket(entries[0]),"Categoria da lista: Esportes");
+  const liveModel=lgBrowseModel("live",entries,null,{});
+  assert.deepEqual(liveModel.platforms.map(i=>i.key),
+    ["Categoria da lista: Esportes","Categoria da lista: Notícias",PLATFORM_UNKNOWN]);
+  assert.equal(liveModel.channels.length,1);
+  const seriesModel=lgBrowseModel("series",entries,null,{});
+  assert.deepEqual(seriesModel.platforms.map(i=>i.key),
+    ["Categoria da lista: Animação","Categoria da lista: Doramas"]);
+  assert.equal(seriesModel.shows.length,1);
+});
+
+test("LG series grouping normalizes spaced season markers and preserves separate show names",()=>{
+  const episodes=[
+    series("(A)mar S01E01","♦ Netflix"),
+    series("(A)mar S01 E02","♦ Netflix"),
+    series("(A)mar T01 Episódio 03","♦ Netflix"),
+    series("(A)mar 1x04","♦ Netflix"),
+    series("(A)mar S02.E01","♦ Netflix"),
+    series("Amar S01E01","♦ Netflix"),
+    series("Outra Série S01E01","♦ Netflix")
+  ];
+  assert.equal(lgSeriesTitle("(A)mar S01 E02"),"(A)mar");
+  assert.equal(lgSeriesTitle("(A)mar T01 Episódio 03"),"(A)mar");
+  assert.equal(lgSeriesTitle("(A)mar 1x04"),"(A)mar");
+  const shows=lgSeriesGroups(episodes);
+  assert.equal(shows.length,3);
+  const amar=shows.find(x=>x.title==="(A)mar");
+  assert.equal(amar.episodes.length,5);
+  assert.equal(amar.platform,"Netflix");
+  assert.ok(shows.some(x=>x.title==="Amar"));
+  assert.ok(shows.some(x=>x.title==="Outra Série"));
+});
+test("LG does not present fake streaming platform when M3U provides only a generic category",()=>{
+  const group="Canais | Desenhos 24H";
+  const item=live("[24H] American Dad 09",group);
+  assert.equal(lgPlatform(item),PLATFORM_UNKNOWN);
+  assert.equal(lgSourceBucket(item),"Categoria da lista: Desenhos 24H");
 });
