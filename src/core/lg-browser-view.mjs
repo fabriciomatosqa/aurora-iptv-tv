@@ -1,5 +1,7 @@
 import {lgSymbol} from "./lg-layout.mjs";
 import {lgEpisodeParts,lgDisplayBucket} from "./lg-browser.mjs";
+import {lgChannelLogos} from "./lg-channel-logos.mjs";
+import {lgMediaKind} from "./lg-media.mjs";
 // Semantic LG-only rendering: three columns, no media catalogue data invented.
 const safe=(v)=>String(v??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 const n=v=>Number(v||0).toLocaleString("pt-BR");
@@ -11,11 +13,12 @@ export function lgRail({title,subtitle,items,selectedKey,action,kind,focusPrefix
       .replace(/[\u0300-\u036f]/g,"").toLocaleLowerCase("pt-BR").includes(needle));
   const shown=hits.slice(0,limit);
   const body=shown.length?shown.map(({item,index})=>{
-    const logo=safeMedia(item.logo);
+    const logo=safeMedia(item.logo),backup=safeMedia(item.logoFallback);
     const channel=kind==="second"&&item.kind==="channel";
     const art=channel?
       '<span class="lg-v5-channel-logo">'+lgSymbol("live","lg-v5-channel-glyph")+
-      (logo?'<img loading="lazy" src="'+logo+'" alt="" onerror="this.remove()">':"")+'</span>':
+      (logo?'<img loading="lazy" src="'+logo+'" data-fallback="'+backup+
+        '" alt="" onerror="if(this.dataset.fallback){this.src=this.dataset.fallback;this.dataset.fallback=\'\';}else this.remove()">':"")+'</span>':
       logo?'<span class="lg-v4-row-art"><img loading="lazy" src="'+logo+'" alt="" onerror="this.parentElement.style.display=\'none\'"></span>':"";
     return '<button type="button" class="lg-v4-row'+(item.key===selectedKey?' selected':'')+
       (channel?' lg-v5-channel-row':'')+
@@ -56,21 +59,26 @@ export function lgEpgMarkup(model,register){
   const programme=p=>'<div class="lg-v4-epg-row"><div class="lg-v4-epg-hour">'+clock(p.start)+'</div>'+
     '<div class="lg-v4-epg-title">'+safe(p.title)+'</div>'+
     (p.description?'<p>'+safe(p.description)+'</p>':'')+'</div>';
-  const poster=safeMedia(selected.logo);
+  const logos=lgChannelLogos(selected,model.channels);
+  const poster=safeMedia(logos.primary);
+  const posterFallback=safeMedia(logos.fallback);
+  const format=lgMediaKind(selected.url);
   const media=safeMedia(selected.url);
   const preview='<section class="lg-v5-preview" aria-label="Prévia do canal">'+
     '<div class="lg-v5-preview-screen" data-preview-state="loading">'+
-    (poster?'<img class="lg-v5-preview-poster" src="'+poster+'" alt="" onerror="this.remove()">':"")+
+    (poster?'<img class="lg-v5-preview-poster" src="'+poster+'" data-fallback="'+posterFallback+'" alt="" onerror="if(this.dataset.fallback){this.src=this.dataset.fallback;this.dataset.fallback=\'\';}else this.remove()">':"")+
     (media?'<video class="lg-v5-preview-video" muted playsinline preload="metadata" src="'+media+'" aria-label="Prévia do canal sem áudio"></video>':"")+
     '<span class="lg-v5-live-pill"><span class="lg-v5-live-dot"></span> PRÉVIA · SEM ÁUDIO</span>'+
     '<div class="lg-v5-preview-state" role="status">Carregando prévia...</div>'+
     '<button type="button" class="lg-v5-preview-open" data-action="item" data-index="'+index+
       '" data-focus="lg-play" aria-label="Abrir '+safe(selected.title)+' em tela cheia">'+
       lgSymbol("fullscreen","lg-v5-preview-button-icon")+'<span>Tela cheia</span></button>'+
-    '</div><p class="lg-v5-preview-hint">Selecione o canal para assistir à prévia. Pressione OK na imagem para abrir em tela cheia.</p>'+
+    '</div><p class="lg-v5-preview-hint">Pressione OK na mini tela para abrir o canal em tela cheia.'+
+    (format==="MPEG-TS"?' Fonte MPEG-TS: no Simulator, a versão HLS costuma ser uma alternativa melhor.':'')+'</p>'+
     '</section>';
   return '<div class="lg-v4-third-title"><span class="lg-v4-overline">CANAL SELECIONADO</span>'+
-    '<h2>'+safe(selected.title)+'</h2><p>'+safe(lgDisplayBucket(model.platform))+'</p></div>'+
+    '<div class="lg-v6-channel-heading">'+(poster?'<span class="lg-v6-channel-logo"><img src="'+poster+'" data-fallback="'+posterFallback+'" alt="" onerror="if(this.dataset.fallback){this.src=this.dataset.fallback;this.dataset.fallback=\'\';}else this.remove()"></span>':"")+
+    '<div><h2>'+safe(selected.title)+'</h2><p>'+safe(lgDisplayBucket(model.platform))+'</p></div></div></div>'+
     preview+'<h3 class="lg-v4-section-label">'+lgSymbol("guide","lg-v5-section-icon")+' Guia de programação</h3>'+
     (!schedule.now&&!schedule.next.length?
       '<div class="lg-v4-no-epg"><span class="lg-v4-no-epg-icon">'+lgSymbol("guide","lg-v5-empty-icon")+'</span><h4>Programação indisponível</h4>'+
@@ -84,8 +92,8 @@ export function lgMovieMarkup(model,cards,query=""){
   const shown=normalized?model.movies.filter(item=>
     String(item.title||"").normalize("NFD").replace(/[\u0300-\u036f]/g,"")
       .toLocaleLowerCase("pt-BR").includes(normalized)):model.movies;
-  const genre=model.genre==="Gênero não informado"?"Outros filmes":model.genre;
-  const platform=model.platform==="Plataforma não informada"?"Da sua lista":lgDisplayBucket(model.platform);
+  const genre=model.genre==="Gênero não informado"?"Sem categoria definida":lgDisplayBucket(model.genre);
+  const platform=model.platform==="Plataforma não informada"?"Da playlist":lgDisplayBucket(model.platform);
   return '<div class="lg-v4-third-title lg-v5-movie-heading"><span class="lg-v4-overline">BIBLIOTECA DE FILMES</span>'+
    '<h2>'+safe(genre)+'</h2><p>'+safe(platform)+' · '+n(model.movies.length)+' títulos disponíveis</p></div>'+
    (model.movies.length>6?'<label class="lg-v5-movie-search-label" for="lg-movie-search">'+

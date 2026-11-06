@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import {parseLgM3U,reclassifyLgItems,auditLgCatalog,mergeLgPlaylist,classifyLgItem,dedupeLgItems} from "../src/core/lg-catalog.mjs";
+import {parseLgM3U,reclassifyLgItems,auditLgCatalog,mergeLgPlaylist,classifyLgItem,dedupeLgItems,lgUnknownGroupSummary} from "../src/core/lg-catalog.mjs";
 const prefix="#EXTM3U\n";
 test("LG importer never caps entries at 180",()=>{
   const rows=[];
@@ -152,4 +152,44 @@ test("LG does not erase source group-title or URLs when reclassifying 24H",()=>{
   assert.equal(item.type,"live");
   assert.equal(item.group,"Séries | Desenhos");
   assert.equal(item.url,"https://example.test/x");
+});
+
+test("LG classifies explicit Cinema films even in mixed FILMES E SÉRIES source",()=>{
+  const mixed="FILMES E SÉRIES";
+  const film={group:mixed,title:"Homem-Aranha: Um Novo Dia [Cinema] (2026)",
+    url:"https://example.test/vod/opaque-id"};
+  const episode={group:mixed,title:"Série A S01 E02",url:"https://example.test/opaque-episode"};
+  const live={group:mixed,title:"A&E FHD [ALT]",url:"https://example.test/opaque-channel"};
+  const opaque={group:mixed,title:"Conteúdo sem dados",url:"https://example.test/opaque"};
+  assert.equal(classifyLgItem(film),"movies");
+  assert.equal(classifyLgItem(episode),"series");
+  assert.equal(classifyLgItem(live),"live");
+  assert.equal(classifyLgItem(opaque),"unknown");
+});
+test("LG files in movie formats are movies, not fabricated series or channels",()=>{
+  assert.equal(classifyLgItem({title:"Filme sem gênero",group:"",url:"https://example.test/library/99.mp4"}),"movies");
+  assert.equal(classifyLgItem({title:"Show S01E01",group:"",url:"https://example.test/library/100.mp4"}),"series");
+  assert.equal(classifyLgItem({title:"Canal HD",group:"Canais",url:"https://example.test/live/123.ts"}),"live");
+});
+test("LG reports top unknown source groups without exposing URLs or secrets",()=>{
+  const items=[
+    {title:"X",group:"FILMES E SÉRIES",type:"unknown",url:"https://example.test/secret-token"},
+    {title:"Y",group:"FILMES E SÉRIES",type:"unknown",url:"https://example.test/password"},
+    {title:"Z",group:"Sem metadados",type:"unknown",url:"https://example.test/credential"},
+    {title:"A",group:"Canais",type:"live",url:"https://example.test/secret"}
+  ];
+  const result=lgUnknownGroupSummary(items);
+  assert.equal(result.total,3);
+  assert.deepEqual(result.groups,[{name:"FILMES E SÉRIES",count:2},{name:"Sem metadados",count:1}]);
+  assert.doesNotMatch(JSON.stringify(result),/secret|password|credential/i);
+});
+
+test("LG audit redacts accidental tokens inside provider group titles",()=>{
+  const result=lgUnknownGroupSummary([
+    {title:"X",type:"unknown",group:"Filmes password=example-secret"},
+    {title:"Y",type:"unknown",group:"https://example.test/private-key?token=secret"}
+  ]);
+  assert.equal(result.total,2);
+  assert.doesNotMatch(JSON.stringify(result),/example-secret|private-key|token=secret/);
+  assert.match(JSON.stringify(result),/\[omitido\]|\[URL omitida\]/);
 });

@@ -187,3 +187,42 @@ execução aprovada → Artifacts → aurora-iptv-tv-lg-simulator-folder. Extrai
 ### Limitações
 
 A playlist pode não conter logos, ano, gênero, plataforma ou EPG. O aplicativo exibe apenas dados de fato disponíveis; codecs e permissão de reprodução automática exigem validação no hardware LG.
+
+
+## LG 0.5.3 — reprodução MPEG-TS/HLS e organização da lista
+
+O arquivo "lista.txt" compartilhado anteriormente na Biblioteca contém apenas **URLs**
+de variantes da playlist (incluindo MPEG-TS e HLS), não os registros M3U completos.
+A fonte remota não pôde ser baixada no ambiente de desenvolvimento; **não é
+possível afirmar que todos os filmes/episódios do provedor foram examinados.**
+
+Para casos de "Filmes | Cinema", Cinema agora é apresentada como a coleção
+original da M3U, e não como uma plataforma fictícia. O título visual de filmes
+pode retirar sufixos técnicos como [Cinema], preservando o ano da própria lista.
+Itens [Cinema] com formato identificável passam a Filmes. Conteúdos ambíguos
+continuam em Sem classificação, em vez de serem misturados com canais.
+
+Em Configurações, o painel **Diagnóstico dos itens sem classificação** mostra
+os principais grupos de origem e suas quantidades, sem imprimir credenciais
+ou endereços. É a forma segura de identificar por que o provedor não
+está declarando claramente parte da biblioteca.
+
+Em Ao Vivo, o player agora explica erros de formato (MPEG-TS, HLS etc.).
+Se um endereço é do formato Xtream /live/usuario/senha/canal.ts,
+o erro oferece botão **Tentar versão HLS**, que modifica apenas o endereço
+temporário do player para .m3u8 e não troca a playlist salva.
+Se esse botão não aparecer, o usuário pode adicionar manualmente a
+variante de playlist HLS existente na Biblioteca em Configurações.
+O sucesso depende do provedor e das capacidades do Simulator ou TV.
+
+No catálogo, a imagem definida por tvg-logo tem prioridade; em seguida,
+é usada imagem fornecida para outra variante de resolução do mesmo canal.
+Canais como GLOBO AMAPA/BAHIA podem usar a marca genérica da TV Globo
+publicada no Wikimedia Commons, caso a lista não possua tvg-logo.
+O logo da emissora não garante a identificação de uma afiliada específica.
+A renderização do logo externo depende de internet no aparelho.
+
+Esta versão modifica somente a interface e os fluxos LG. Não remove
+playlists, favoritos, dados do IndexedDB, posições ou PIN.
+A saída LG webOS TV 26 Simulator permanece no artefato
+aurora-iptv-tv-lg-simulator-folder (escolher pasta com appinfo.json).

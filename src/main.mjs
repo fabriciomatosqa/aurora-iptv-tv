@@ -8,10 +8,12 @@ import {remoteKey,registerRemoteKeys} from "./core/remote.mjs";
 import {hasTizenPlayer,startTizenPlayer,tizenPositionSeconds,toggleTizenPlayback,seekTizen,stopTizenPlayer} from "./core/tizen-player.mjs";
 import {loadCatalog,saveCatalog,loadGuide,saveGuide as saveGuideDB,deletePlaylistData} from "./core/catalog-db.mjs";
 import { focusFirst, restoreFocus, nextFocus } from "./core/focus.mjs";
-import {parseLgM3U,reclassifyLgItems,auditLgCatalog,mergeLgPlaylist,dedupeLgItems} from "./core/lg-catalog.mjs";
+import {parseLgM3U,reclassifyLgItems,auditLgCatalog,mergeLgPlaylist,dedupeLgItems,lgUnknownGroupSummary} from "./core/lg-catalog.mjs";
 import {LG_LIBRARY_ROUTES, lgHomeMarkup, lgSecondaryMarkup, lgGroupKey, lgFacets,lgSymbol} from "./core/lg-layout.mjs";
-import {lgBrowseModel,lgSeriesGroups,lgMatchSchedule,invalidateLgBrowserIndex,lgIsCategoryBucket,lgDisplayBucket,PLATFORM_UNKNOWN,GENRE_UNKNOWN} from "./core/lg-browser.mjs";
+import {lgBrowseModel,lgSeriesGroups,lgMatchSchedule,invalidateLgBrowserIndex,lgIsCategoryBucket,lgDisplayBucket,lgMovieDisplayParts,PLATFORM_UNKNOWN,GENRE_UNKNOWN} from "./core/lg-browser.mjs";
 import {lgRail,lgBrowserHeader,lgEpgMarkup,lgMovieMarkup,lgEpisodesMarkup,lgFootballHomeMarkup} from "./core/lg-browser-view.mjs";
+import {lgChannelLogos} from "./core/lg-channel-logos.mjs";
+import {lgMediaKind,lgHlsAlternative,lgMediaErrorText} from "./core/lg-media.mjs";
 
 const app = document.getElementById("app");
 const playerRoot = document.getElementById("player-root");
@@ -98,7 +100,7 @@ function navigate(next) { if (next === route) return; history.push(route);
   route = next; search = ""; resetLgPage();render();lgScrollMainTop(); }
 function goBack() { if (currentPlay) { closePlayer(); return; } if (history.length) { route = history.pop(); search = ""; resetLgPage();render();lgScrollMainTop(); } else if (route !== "home") { route = "home"; resetLgPage();render();lgScrollMainTop(); } }
 function pageShell(label) {
-  return '<div class="topbar"><div class="eyebrow">' + esc(label) + '</div><div class="topright">AURORA IPTV TV · PRÉVIA 0.2.0</div></div>';
+  return '<div class="topbar"><div class="eyebrow">' + esc(label) + '</div><div class="topright">AURORA IPTV TV · PRÉVIA '+(lgTv?"LG 0.5.3":"0.2.0")+'</div></div>';
 }
 function empty(title, description, action = "") {
   return '<div class="empty"><h3>' + esc(title) + '</h3><p>' + esc(description) + '</p>' +
@@ -109,9 +111,9 @@ function addCard(item, label = "") {
   const media = safeMedia(item.logo);
   const title = esc(item.title);
   if(lgTv && route==="movies" && item.type==="movies"){
-    const found=/\(((?:19|20)\d{2})\)\s*$/.exec(item.title||"");
-    const year=found?found[1]:"";
-    const cleanTitle=esc(String(item.title||"").replace(/\s*\((?:19|20)\d{2}\)\s*$/,"").trim());
+    const film=lgMovieDisplayParts(item);
+    const year=film.year;
+    const cleanTitle=esc(film.title);
     const art=media?'<img loading="lazy" src="'+esc(media)+'" alt="" onerror="this.remove()">':
       '<span class="lg-v5-film-fallback">'+esc(String(item.title||"F").slice(0,1))+'</span>';
     return '<button class="card lg-v5-film-card" data-action="item" data-index="'+index+
@@ -265,6 +267,14 @@ function settings() {
   const selected = activePlaylist();
   const s = stats();
   const audit=selected?.importAudit;
+  const unknownSummary=lgTv&&selected?lgUnknownGroupSummary(selected.items):null;
+  const unknownPanel=unknownSummary?.total?
+    '<div class="panel lg-source-diagnostics"><h3>Diagnóstico dos itens sem classificação</h3>'+
+    '<p>O provedor não informou detalhes suficientes para classificar <strong>'+
+    unknownSummary.total.toLocaleString("pt-BR")+'</strong> itens. Grupos de origem mais frequentes:</p>'+
+    '<div class="lg-source-groups">'+unknownSummary.groups.map(row=>
+      '<div><span>'+esc(row.name)+'</span><strong>'+row.count.toLocaleString("pt-BR")+'</strong></div>'
+    ).join("")+'</div><p class="muted">Somente nomes de grupos e contagens são exibidos. URLs e senhas não aparecem aqui.</p></div>':"";
   const lgImportInfo=lgTv&&selected?'<div class="lg-import-audit" role="status">Playlist: <strong>'+esc(selected.name)+'</strong> · Entradas M3U encontradas: <strong>'+(audit?.declared == null ? "Não disponível" : Number(audit.declared).toLocaleString("pt-BR"))+'</strong> · Importadas: <strong>'+Number(selected.items?.length||0).toLocaleString("pt-BR")+'</strong> · URLs ignoradas: <strong>'+(audit?.invalid == null ? "Não disponível" : Number(audit.invalid).toLocaleString("pt-BR"))+'</strong> · URLs duplicadas: <strong>'+(audit?.duplicates == null ? "Não disponível" : Number(audit.duplicates).toLocaleString("pt-BR"))+'</strong><p class="muted">Os números correspondem ao arquivo M3U recebido, não à quantidade que o provedor anuncia externamente.</p></div>':'';
   const lines = state.playlists.map(p => '<div class="playlist-line"><strong>' + esc(p.name) + (p.id===state.activeId ? ' ✓' : '') +
    '</strong><div class="actions"><button class="btn" data-focus="activate-' + esc(p.id) + '" data-action="activate" data-id="' + esc(p.id) + '">Usar</button>' +
@@ -279,7 +289,7 @@ function settings() {
     '<form id="pin-create"><label class="field">Criar PIN de 4 a 12 números<input name="pin" type="password" inputmode="numeric" minlength="4" maxlength="12" required data-focus="pin-create"></label>' +
     '<button class="btn primary" type="submit" data-focus="pin-create-submit">Ativar proteção +18</button></form>';
   return pageShell("Configurações") + '<h2>Configurações</h2><p class="subtitle">Gerencie suas fontes, preferências e testes de reprodução.</p>' +
-   lgImportInfo + '<div class="settings-grid"><div class="panel"><h3>Minhas playlists</h3><p>Adicione uma URL M3U ou cole o texto de uma playlist de testes.</p>' +
+   lgImportInfo + unknownPanel + '<div class="settings-grid"><div class="panel"><h3>Minhas playlists</h3><p>Adicione uma URL M3U ou cole o texto de uma playlist de testes.</p>' +
    '<form id="playlist-form"><label class="field">Nome da playlist<input name="name" data-focus="name" placeholder="Minha playlist" required maxlength="80"></label>' +
    '<label class="field">Endereço URL (opcional ao colar M3U)<input name="url" type="url" data-focus="url" placeholder="https://.../playlist.m3u"></label>' +
    '<label class="field">Texto M3U (alternativo, para testar no PC)<textarea name="m3u" data-focus="m3u" placeholder="#EXTM3U&#10;#EXTINF:-1 group-title=..."></textarea></label>' +
@@ -328,18 +338,24 @@ function lgTripleBrowser(preferredFocus="") {
     firstTitle=hasCategories?"Categorias e plataformas":"Plataformas";secondTitle="Canais";
     first=model.platforms.map(group=>({...group,label:group.key===PLATFORM_UNKNOWN?
       "Outros canais":lgDisplayBucket(group.key)}));
-    second=model.channels.map(ch=>({key:ch.url,label:ch.title,logo:ch.logo||"",kind:"channel"}));
+    second=model.channels.map(ch=>{
+      const logos=lgChannelLogos(ch,model.channels);
+      return {key:ch.url,label:ch.title,logo:logos.primary,logoFallback:logos.fallback,kind:"channel"};
+    });
     firstLabel=hasCategories?"Organizado pelos grupos da playlist":"Escolha a plataforma";
     secondLabel=lgDisplayBucket(model.platform)||"Todos os canais";
     third=lgEpgMarkup(model,register);
   } else if(route==="movies"){
     const hasCollections=model.platforms.some(group=>lgIsCategoryBucket(group.key));
     const hasNamedPlatform=model.platforms.some(group=>group.key!==PLATFORM_UNKNOWN&&!lgIsCategoryBucket(group.key));
-    firstTitle="Gêneros";secondTitle=hasCollections?"Coleções e plataformas":hasNamedPlatform?"Plataformas":"Coleções";
-    first=model.genres.map(group=>({...group,label:group.key===GENRE_UNKNOWN?"Outros gêneros":group.label}));
+    const firstHasCollections=model.genres.some(group=>lgIsCategoryBucket(group.key));
+    firstTitle=firstHasCollections?"Gêneros e coleções":"Gêneros";
+    secondTitle=hasCollections?"Coleções e plataformas":hasNamedPlatform?"Plataformas":"Origem";
+    first=model.genres.map(group=>({...group,label:group.key===GENRE_UNKNOWN?
+      "Sem gênero na lista":lgDisplayBucket(group.label)}));
     second=model.platforms.map(group=>({...group,label:group.key===PLATFORM_UNKNOWN?
-      "Filmes da sua lista":lgDisplayBucket(group.key)}));
-    firstLabel="Selecione o gênero";secondLabel=model.genre||"Escolha um gênero";
+      "Da playlist":lgDisplayBucket(group.key)}));
+    firstLabel="Selecione o gênero";secondLabel=lgDisplayBucket(model.genre)||"Escolha uma categoria";
     third=lgMovieMarkup(model,filtered=>cards(filtered),lgMovieQuery);
   } else if(route==="series"){
     const hasCategories=model.platforms.some(group=>lgIsCategoryBucket(group.key));
@@ -386,7 +402,10 @@ function startLgInlinePreview(){
     label.textContent=text;
   };
   video.addEventListener("playing",()=>setState("playing","Prévia em reprodução"));
-  video.addEventListener("error",()=>setState("error","Prévia indisponível neste dispositivo. Tente tela cheia."));
+  video.addEventListener("error",()=>setState("error",
+    lgMediaKind(lgBrowserModel?.selected?.url)==="MPEG-TS"?
+      "Prévia MPEG-TS não suportada aqui. Tente tela cheia ou uma fonte HLS.":
+      "Prévia indisponível neste dispositivo. Tente tela cheia."));
   video.addEventListener("stalled",()=>setState("loading","Aguardando o sinal..."));
   const result=video.play();
   if(result&&typeof result.catch==="function")
@@ -479,16 +498,27 @@ function startPlayer(item) {
   });
   vid.addEventListener("ended",()=>{delete state.positions[key];persist();});
   vid.addEventListener("error",()=>{
-     const msg="O dispositivo/navegador não conseguiu reproduzir esta mídia. Confira formato, acesso e codecs.";
-     if(!lgTv){notice=msg;return;}
-     const screen=playerRoot.querySelector(".player-screen");
-     if(screen&&!screen.querySelector(".lg-player-error")){
-       const box=document.createElement("div");
-       box.className="lg-player-error";
-       box.setAttribute("role","alert");
-       box.textContent=msg+" Pressione Voltar para selecionar outro conteúdo.";
-       screen.appendChild(box);
-     }
+    const effective=vid.dataset.hlsTried==="true"?{...item,url:vid.currentSrc||vid.src}:item;
+    const msg="O dispositivo/navegador não conseguiu reproduzir esta mídia. "+
+      (lgTv?lgMediaErrorText(effective,vid.error?.code||0):"Confira formato, acesso e codecs.");
+    if(!lgTv){notice=msg;return;}
+    const screen=playerRoot.querySelector(".player-screen");
+    if(!screen)return;
+    screen.querySelector(".lg-player-error")?.remove();
+    const box=document.createElement("div");
+    box.className="lg-player-error lg-media-diagnostics";
+    box.setAttribute("role","alert");
+    const content=document.createElement("p");
+    content.textContent=msg+" Pressione Voltar para selecionar outro conteúdo.";
+    box.appendChild(content);
+    const alt=lgHlsAlternative(item.url);
+    if(alt && vid.dataset.hlsTried!=="true"){
+      const btn=document.createElement("button");
+      btn.type="button";btn.dataset.action="player-try-hls";
+      btn.dataset.focus="player-try-hls";btn.textContent="Tentar versão HLS";
+      box.appendChild(btn);
+    }
+    screen.appendChild(box);
    });
   vid.play().catch(()=>{ /* Browser may require explicit playback gesture. */ });
   vid.focus();
@@ -711,6 +741,18 @@ app.addEventListener("change",event=>{
 playerRoot.addEventListener("click",event=>{
   const action=event.target.closest("[data-action]")?.dataset.action;
   if(action==="close-player")closePlayer();
+  if(action==="player-try-hls" && lgTv && currentPlay){
+    const vid=playerRoot.querySelector("video");
+    const alternate=lgHlsAlternative(currentPlay.url);
+    if(vid&&alternate&&vid.dataset.hlsTried!=="true"){
+      vid.dataset.hlsTried="true";
+      playerRoot.querySelector(".lg-player-error")?.remove();
+      vid.src=alternate;
+      vid.load();
+      vid.play().catch(()=>{});
+      vid.focus();
+    }
+  }
   if(action==="player-favorite" && currentPlay){
     const key=itemKey(currentPlay,state.activeId);
     state.favorites=state.favorites.includes(key)?state.favorites.filter(x=>x!==key):[...state.favorites,key];
