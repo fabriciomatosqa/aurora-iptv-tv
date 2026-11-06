@@ -229,3 +229,42 @@ test("LG parental PIN keeps adult programs out of Home totals until unlocked",as
  await page.reload();
  await expect(page.locator(".lg-tile-live .lg-tile-total")).toContainText("1 item");
 });
+
+
+test("LG separates 24H series-branded linear channels and groups decorated Netflix episodes",async({page})=>{
+  await importM3U(page,[
+    entry("Séries | Desenhos 24H","[24H] American Dad 09","https://example.test/live/ad09.m3u8"),
+    entry("Séries | Desenhos 24H","[24H] As Visões da Raven","https://example.test/live/raven.m3u8"),
+    entry("Séries | ♦ Netflix","(A)mar S01E01","https://example.test/series/amar1.mp4"),
+    entry("Séries | ♦ Netflix","(A)mar S01 E02","https://example.test/series/amar2.mp4"),
+    entry("Séries | ♦ Netflix","(A)mar 1x03","https://example.test/series/amar3.mp4")
+  ],"Catálogo realista por grupos");
+  await page.locator('[data-focus="nav-live"]').click();
+  await expect(page.locator(".lg-v4-rail").first()).toContainText("Categorias");
+  await expect(page.locator(".lg-v4-rail").first()).toContainText("Desenhos 24H");
+  await expect(page.locator(".lg-v4-rail").nth(1)).toContainText("[24H] American Dad");
+  await page.locator('[data-focus="nav-series"]').click();
+  await expect(page.locator(".lg-v4-rail").first()).toContainText("Netflix");
+  await expect(page.locator(".lg-v4-rail").nth(1).locator(".lg-v4-row")).toHaveCount(1);
+  await expect(page.locator(".lg-v4-rail").nth(1)).toContainText("(A)mar");
+  await expect(page.locator(".lg-v4-third")).toContainText("3 episódios");
+  await expect(page.locator(".lg-v4-third")).not.toContainText("American Dad");
+  await page.reload();
+  await page.locator('[data-focus="home-series"]').click();
+  await expect(page.locator(".lg-v4-third")).toContainText("3 episódios");
+});
+test("LG uses source group categories when Live platform cannot be verified",async({page})=>{
+  await importM3U(page,[
+    entry("Canais | Esportes","Canal Esporte 1","https://example.test/live/s1.m3u8"),
+    entry("Canais | Notícias","Canal Jornal 1","https://example.test/live/n1.m3u8"),
+    entry("Canais | Esportes","Canal Esporte 2","https://example.test/live/s2.m3u8")
+  ],"Canais com grupos reais");
+  await page.locator('[data-focus="nav-live"]').click();
+  await expect(page.locator(".lg-v4-rail").first()).toContainText("Plataformas / categorias");
+  await expect(page.locator(".lg-v4-rail").first()).toContainText("Categoria da lista: Esportes");
+  await expect(page.locator(".lg-v4-rail").first()).toContainText("Categoria da lista: Notícias");
+  await expect(page.locator(".lg-v4-rail").nth(1).locator(".lg-v4-row")).toHaveCount(2);
+  await page.locator(".lg-v4-rail").first().getByRole("button",{name:/Categoria da lista: Notícias/}).click();
+  await expect(page.locator(".lg-v4-rail").nth(1).locator(".lg-v4-row")).toHaveCount(1);
+  await expect(page.locator(".lg-v4-third")).toContainText("Canal Jornal 1");
+});
