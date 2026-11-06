@@ -76,13 +76,28 @@ export function lgSourceCategory(item){
   if(!relevant.length)return CATEGORY_UNKNOWN;
   return relevant[relevant.length-1].slice(0,90);
 }
+export function lgNormalizeGroupName(value){
+  const trimmed=text(value).replace(/\s+/g," ");
+  // Normalize duplicate uppercase/lowercase groups, preserving acronyms and brands.
+  const key=norm(trimmed);
+  const names={
+    "esportes":"Esportes","documentarios":"Documentários","desenhos":"Desenhos",
+    "capitais":"Capitais","canais 24h":"Canais 24h","noticias":"Notícias",
+    "filmes e series":"Filmes e séries","fhd h265":"FHD H265"
+  };
+  return names[key]||trimmed;
+}
 export function lgSourceBucket(item){
   const platform=findPlatform(item);
   if(platform!==PLATFORM_UNKNOWN)return platform;
   const category=lgSourceCategory(item);
-  return category===CATEGORY_UNKNOWN?PLATFORM_UNKNOWN:CATEGORY_PREFIX+category;
+  return category===CATEGORY_UNKNOWN?PLATFORM_UNKNOWN:CATEGORY_PREFIX+lgNormalizeGroupName(category);
 }
 export function lgIsCategoryBucket(label){return String(label||"").startsWith(CATEGORY_PREFIX);}
+export function lgDisplayBucket(label){
+  const value=text(label);
+  return lgIsCategoryBucket(value)?value.slice(CATEGORY_PREFIX.length):value;
+}
 export {CATEGORY_PREFIX};
 export function lgSeriesTitle(title){
   const value=text(title).replace(/^\s*(?:\[24H\]\s*)/i,"");
