@@ -26,7 +26,7 @@ test("LG live platform -> channels -> selected channel guide",()=>{
   assert.equal(result.schedule.now.title,"Jornal ao vivo");
   assert.equal(result.schedule.next[0].title,"Próximo");
   assert.ok(lgEpgMarkup(result,()=>0).includes("Jornal ao vivo"));
-  assert.ok(lgEpgMarkup(result,()=>0).includes("Assistir canal"));
+  assert.ok(lgEpgMarkup(result,()=>0).includes("Tela cheia"));
 });
 test("LG movie genre -> platform -> filtered movies; no live leakage",()=>{
   const all=[film("F1","Filmes | Ação | Netflix"),film("F2","Filmes | Ação | Disney+"),film("F3","Filmes | Comédia | Netflix"),live("TV","Globoplay")];
