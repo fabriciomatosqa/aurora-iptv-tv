@@ -326,3 +326,66 @@ test("LG films present full poster images, production year and title search",asy
   await expect(page.locator(".lg-v5-film-card")).toHaveCount(1);
   await expect(page.locator(".lg-v5-film-card")).toContainText("A Fuga");
 });
+
+
+test("LG Globo Capitais resolves the national logo when the M3U has no tvg-logo",async({page})=>{
+  await page.route("**/wiki/Special:FilePath/**",route=>route.fulfill({
+    status:200,contentType:"image/svg+xml",
+    body:'<svg xmlns="http://www.w3.org/2000/svg" width="80" height="80"><rect width="80" height="80" fill="#eef4f8"/></svg>'
+  }));
+  await importM3U(page,[
+    entry("Canais | Capitais","GLOBO AMAPA FHD","https://example.test/live/amapa.ts"),
+    entry("Canais | Capitais","GLOBO BAHIA SALVADOR FHD","https://example.test/live/bahia.ts")
+  ],"Globo capitais sem logos");
+  await page.locator('[data-focus="nav-live"]').click();
+  const row=page.locator(".lg-v5-channel-row").first();
+  await expect(row.locator(".lg-v5-channel-logo img")).toHaveAttribute("src",/Special:FilePath\/TV_Globo_logo/);
+  await expect(page.locator(".lg-v6-channel-logo img")).toHaveAttribute("src",/Special:FilePath\/TV_Globo_logo/);
+});
+test("LG treats Cinema as a real collection and removes its technical title tag",async({page})=>{
+  const media=[
+    entry("Filmes | Cinema","Homem-Aranha: Um Novo Dia [Cinema] (2026)","https://example.test/watch/101.m3u8"),
+    entry("Filmes | Cinema","Moana [Cinema] (2026)","https://example.test/watch/102.m3u8"),
+    entry("Filmes | Ficcao","Minha Ficção (2024)","https://example.test/watch/103.mp4"),
+    entry("Filmes | Drama","Drama Real (2023)","https://example.test/watch/104.mp4")
+  ];
+  await importM3U(page,media,"Filmes categorizados");
+  await page.locator('[data-focus="nav-movies"]').click();
+  const first=page.locator(".lg-v4-rail").first();
+  await expect(first).toContainText("Cinema");
+  await expect(first).toContainText("Ficção");
+  await first.getByRole("button",{name:/Cinema/}).click();
+  await expect(page.locator(".lg-v5-film-card")).toHaveCount(2);
+  await expect(page.locator(".lg-v5-film-card").first().locator(".card-title")).not.toContainText("[Cinema]");
+  await expect(page.locator(".lg-v5-film-year").first()).toHaveText("2026");
+  await expect(page.locator(".lg-v4-third-title")).toContainText("Cinema");
+});
+test("LG diagnostics show missing classification by actual group but do not show stream URLs",async({page})=>{
+  await importM3U(page,[
+    entry("FILMES E SÉRIES","Sem informações","https://example.test/secret-stream.m3u8"),
+    entry("FILMES E SÉRIES","Título ambíguo","https://example.test/another-credential.m3u8")
+  ],"Auditoria agrupada");
+  const report=page.locator(".lg-source-diagnostics");
+  await expect(report).toBeVisible();
+  await expect(report).toContainText("2");
+  await expect(report).toContainText("FILMES E SÉRIES");
+  await expect(report).not.toContainText("secret-stream");
+  await expect(report).not.toContainText("another-credential");
+});
+test("LG player displays MPEG-TS troubleshooting and offers manual HLS fallback",async({page})=>{
+  await page.route("https://example.test/live/user/pass/12.ts",route=>route.abort());
+  await page.route("https://example.test/live/user/pass/12.m3u8",route=>route.abort());
+  await importM3U(page,[
+    entry("Canais | Capitais","A&E FHD [ALT]","https://example.test/live/user/pass/12.ts")
+  ],"Origem de transmissão MPEG-TS");
+  await page.locator('[data-focus="nav-live"]').click();
+  await page.locator('[data-focus="lg-play"]').click();
+  const error=page.locator(".lg-player-error");
+  await expect(error).toBeVisible({timeout:15000});
+  await expect(error).toContainText("MPEG-TS");
+  await error.getByRole("button",{name:"Tentar versão HLS"}).click();
+  await expect(page.locator(".player-screen video")).toHaveAttribute("src",
+    "https://example.test/live/user/pass/12.m3u8");
+  await page.locator('[data-action="close-player"]').click();
+  await expect(page.locator(".lg-v5-preview-screen")).toBeVisible();
+});
