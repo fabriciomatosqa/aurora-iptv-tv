@@ -1,7 +1,7 @@
 // LG-specific M3U parser and classification with explicit evidence priority.
 // The group name can be ambiguous (e.g. "FILMES E SÉRIES" contains live channels).
 // Never classify a broadcaster as a movie solely because of that mixed category.
-const EPISODE=/(?:^|[\s._-])(?:s\d{1,3}[\s._-]*e\d{1,3}|\d{1,3}x\d{1,3})(?=$|[\s._-])/i;
+const EPISODE=/(?:^|[\s._-])(?:s\d{1,3}[\s._-]*e(?:p(?:is[oó]dio)?)?\s*\d{1,3}|\d{1,3}\s*x\s*\d{1,3}|t(?:emporada)?\s*\d{1,3}[\s._-]*(?:e|ep|epis[oó]dio)\s*\d{1,3})(?=$|[\s._-])/i;
 const LIVE_GROUP=/(?:^|[\s|/()[\]_-])(?:canais?|ao vivo|live tv|tv ao vivo|esportes?|noticias|notícias)(?:$|[\s|/()[\]_-])/i;
 const SERIES_GROUP=/(?:^|[\s|/()[\]_-])(?:séries?|series|seriados|tv shows)(?:$|[\s|/()[\]_-])/i;
 const MOVIE_GROUP=/(?:^|[\s|/()[\]_-])(?:filmes?|movies?|cinema|vod)(?:$|[\s|/()[\]_-])/i;
@@ -21,6 +21,14 @@ function typeFor(item) {
   if(URL_SERIES.test(url))return "series";
   if(URL_MOVIE.test(url))return "movies";
   if(URL_LIVE.test(url))return "live";
+  // Explicit title tags and video-file extensions can distinguish movies in
+  // generic "FILMES E SÉRIES" source groups without guessing from popularity.
+  // Recognized linear broadcasters with quality labels must remain Live TV.
+  if(CHANNEL_BRANDS.test(title)&&(CHANNEL_VARIANT.test(title)||Boolean(item?.tvgId)))
+    return "live";
+  if(/(?:^|\s)\[(?:CINEMA|FILME|FILMES|VOD)\](?=\s|$)/i.test(title))return "movies";
+  if(/\.(?:mp4|m4v|mkv|avi|mov|wmv)(?:[?#]|$)/i.test(url) &&
+     !LIVE_GROUP.test(group))return "movies";
   const mixed=MOVIE_GROUP.test(group)&&SERIES_GROUP.test(group);
   const broadcast=CHANNEL_BRANDS.test(title) &&
     (CHANNEL_VARIANT.test(title) || LIVE_GROUP.test(group) || mixed || Boolean(item?.tvgId));
@@ -114,6 +122,21 @@ export function parseLgM3U(text){
   }
   if(pending)invalid++;
   return {items,count:items.length,declared,invalid,duplicates,guideUrl};
+}
+// Report only source groups and counts; never expose stream URLs, tokens or
+// credentials. Useful when imported M3U is inaccessible to the developer.
+export function lgUnknownGroupSummary(items,limit=12){
+  const groups=new Map();
+  let total=0;
+  for(const item of items||[]){
+    if(item.type!=="unknown")continue;
+    total++;
+    const group=String(item.group||"").trim()||"Sem grupo";
+    groups.set(group,(groups.get(group)||0)+1);
+  }
+  return {total,groups:[...groups.entries()]
+    .sort((a,b)=>b[1]-a[1]||a[0].localeCompare(b[0],"pt-BR"))
+    .slice(0,limit).map(([name,count])=>({name,count}))};
 }
 export function auditLgCatalog(items){
   const result={all:0,live:0,movies:0,series:0,unknown:0,episodes:0};
