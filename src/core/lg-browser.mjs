@@ -163,10 +163,16 @@ function indexMovies(index){
   index.movies={byGenre,genres};
   return index.movies;
 }
-function episodeNumber(e){
-  const a=/(?:^|[\s._-])s(\d{1,3})[\s._-]*e(\d{1,3})/i.exec(e.title) ||
-    /(?:^|[\s._-])(\d{1,3})x(\d{1,3})/i.exec(e.title);
-  return a?Number(a[1])*1000+Number(a[2]):null;
+export function lgEpisodeParts(item){
+  const title=String(typeof item==="string"?item:item?.title||"");
+  const match=/(?:^|[\s._–-])s(\d{1,3})[\s._-]*e(?:p(?:is[oó]dio)?)?\s*(\d{1,3})/i.exec(title) ||
+    /(?:^|[\s._–-])(\d{1,3})\s*x\s*(\d{1,3})/i.exec(title) ||
+    /(?:^|[\s._–-])t(?:emporada)?\s*(\d{1,3})[\s._-]*(?:e|ep|epis[oó]dio)\s*(\d{1,3})/i.exec(title);
+  return match?{season:Number(match[1]),episode:Number(match[2])}:null;
+}
+function episodeNumber(ep){
+  const info=lgEpisodeParts(ep);
+  return info?info.season*1000+info.episode:null;
 }
 function indexSeries(index){
   if(index.series)return index.series;
