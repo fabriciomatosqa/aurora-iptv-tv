@@ -284,6 +284,10 @@ test("LG category rows display simple names and combine uppercase provider dupli
   await expect(page.locator(".lg-v4-rail").nth(1).locator(".lg-v4-row")).toHaveCount(2);
 });
 test("LG selected channel has a logo, muted inline preview, and TV remote fullscreen action",async({page})=>{
+  await page.route("https://example.test/logo-globo.png",route=>route.fulfill({
+    status:200,contentType:"image/svg+xml",
+    body:'<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100"><rect width="100" height="100" fill="#e9f2f7"/></svg>'
+  }));
   await importM3U(page,[
     '#EXTINF:-1 group-title="Canais | Notícias" tvg-logo="https://example.test/logo-globo.png",GLOBO BAHIA FHD\nhttps://example.test/live/globo.m3u8'
   ],"Canais com logos");
@@ -302,6 +306,10 @@ test("LG selected channel has a logo, muted inline preview, and TV remote fullsc
   await expect(page.locator(".lg-v5-preview-open")).toBeVisible();
 });
 test("LG films present full poster images, production year and title search",async({page})=>{
+  await page.route("https://example.test/poster-*.jpg",route=>route.fulfill({
+    status:200,contentType:"image/svg+xml",
+    body:'<svg xmlns="http://www.w3.org/2000/svg" width="200" height="300"><rect width="200" height="300" fill="#1b4854"/></svg>'
+  }));
   const titles=["Aventura Um (2012)","Aventura Dois (2018)","Drama Original (2020)",
     "Uma Boa História (2015)","A Grande Aventura (1999)","Mais um Filme (2010)",
     "Cinema Agora (2021)","A Fuga (2017)"];
