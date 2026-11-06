@@ -1339,3 +1339,27 @@ body.lg-tv.theme-light .lg-v4-no-epg p{color:#375e71;}
   body.lg-tv .lg-v4-row-art{width:34px;height:40px;flex-basis:34px;}
   body.lg-tv .lg-v4-no-epg{padding:16px 14px;}
 }
+
+
+/* LG 0.5.1: provenance-aware categories and season-separated episodes. */
+body.lg-tv .lg-v4-season-heading {
+  font-size:19px;
+  font-weight:800;
+  color:#91f2da;
+  padding:21px 8px 8px;
+  margin:6px 0 7px;
+  border-bottom:1px solid rgba(124,213,200,.25);
+  letter-spacing:.2px;
+}
+body.lg-tv .lg-v4-rail-head p {
+  color:#bdd5df;
+  font-size:15px;
+  line-height:1.5;
+}
+body.lg-tv .lg-v4-row.selected .lg-v4-row-name {
+  font-weight:800;
+}
+body.lg-tv.theme-light .lg-v4-season-heading {
+  color:#086b5f;
+  border-bottom-color:rgba(38,125,110,.26);
+}
