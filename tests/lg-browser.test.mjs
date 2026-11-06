@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import {lgBrowseModel,lgPlatform,lgGenre,lgSourceCategory,lgSourceBucket,lgSeriesTitle,lgSeriesGroups,lgEpgForChannel,lgMatchSchedule,invalidateLgBrowserIndex,PLATFORM_UNKNOWN,GENRE_UNKNOWN} from "../src/core/lg-browser.mjs";
+import {lgBrowseModel,lgPlatform,lgGenre,lgSourceCategory,lgSourceBucket,lgNormalizeGroupName,lgDisplayBucket,lgSeriesTitle,lgSeriesGroups,lgEpgForChannel,lgMatchSchedule,invalidateLgBrowserIndex,PLATFORM_UNKNOWN,GENRE_UNKNOWN} from "../src/core/lg-browser.mjs";
 import {lgEpgMarkup,lgRail,lgMovieMarkup,lgEpisodesMarkup,lgFootballHomeMarkup} from "../src/core/lg-browser-view.mjs";
 
 const E=String.raw;
@@ -205,4 +205,22 @@ test("LG does not present fake streaming platform when M3U provides only a gener
   const item=live("[24H] American Dad 09",group);
   assert.equal(lgPlatform(item),PLATFORM_UNKNOWN);
   assert.equal(lgSourceBucket(item),"Categoria da lista: Desenhos 24H");
+});
+
+test("LG category display drops technical prefix without losing distinct source key",()=>{
+  const a=live("SPORTV FHD","Canais | ESPORTES");
+  const b=live("SPORTV HD","Canais | Esportes");
+  const result=lgBrowseModel("live",[a,b],null,{});
+  assert.deepEqual(result.platforms.map(x=>x.key),["Categoria da lista: Esportes"]);
+  assert.equal(result.channels.length,2);
+  assert.equal(lgDisplayBucket(result.platforms[0].key),"Esportes");
+  assert.equal(lgNormalizeGroupName("DOCUMENTÁRIOS"),"Documentários");
+});
+test("LG film source collections are derived only from real M3U groups",()=>{
+  const filmOne=film("Aventura (2022)","Filmes | Drama | Sessão Brasileira");
+  const filmTwo=film("Clássico (2014)","Filmes | Drama");
+  const model=lgBrowseModel("movies",[filmOne,filmTwo],null,{genre:"Drama"});
+  assert.equal(model.platforms.length,2);
+  assert.deepEqual(model.platforms.map(x=>x.key),["Categoria da lista: Sessão Brasileira",PLATFORM_UNKNOWN]);
+  assert.deepEqual(model.movies.map(x=>x.title),["Aventura (2022)"]);
 });
