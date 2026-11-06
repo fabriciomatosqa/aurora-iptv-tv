@@ -161,12 +161,22 @@ function indexLive(index){
   index.live={byPlatform,platforms:facetsFromMap(byPlatform)};
   return index.live;
 }
+function lgMovieSource(item){
+  const platform=lgPlatform(item);
+  if(platform!==PLATFORM_UNKNOWN)return platform;
+  // When group-title carries a separate original collection label, preserve it.
+  // Do not repeat "Drama" as a fake streaming provider.
+  const segments=tokens(item?.group||"").filter(x=>
+    !KIND.test(x) && !matches(x,GENRES) && !matches(x,KNOWN_PLATFORMS));
+  const actual=segments.at(-1)||"";
+  return actual?CATEGORY_PREFIX+lgNormalizeGroupName(actual):PLATFORM_UNKNOWN;
+}
 function indexMovies(index){
   if(index.movies)return index.movies;
   const byGenre=new Map();
   for(const item of index.items){
     if(item.type!=="movies")continue;
-    const genre=lgGenre(item),platform=lgPlatform(item);
+    const genre=lgGenre(item),platform=lgMovieSource(item);
     if(!byGenre.has(genre))byGenre.set(genre,new Map());
     const byPlatform=byGenre.get(genre);
     if(!byPlatform.has(platform))byPlatform.set(platform,[]);
@@ -177,13 +187,6 @@ function indexMovies(index){
   })).sort((a,b)=>isUnknown(a.key)!==isUnknown(b.key)?isUnknown(a.key)?1:-1:facetSort(a,b));
   index.movies={byGenre,genres};
   return index.movies;
-}
-export function lgEpisodeParts(item){
-  const title=String(typeof item==="string"?item:item?.title||"");
-  const match=/(?:^|[\s._–-])s(\d{1,3})[\s._-]*e(?:p(?:is[oó]dio)?)?\s*(\d{1,3})/i.exec(title) ||
-    /(?:^|[\s._–-])(\d{1,3})\s*x\s*(\d{1,3})/i.exec(title) ||
-    /(?:^|[\s._–-])t(?:emporada)?\s*(\d{1,3})[\s._-]*(?:e|ep|epis[oó]dio)\s*(\d{1,3})/i.exec(title);
-  return match?{season:Number(match[1]),episode:Number(match[2])}:null;
 }
 function episodeNumber(ep){
   const info=lgEpisodeParts(ep);
