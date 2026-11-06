@@ -9,8 +9,8 @@ import {hasTizenPlayer,startTizenPlayer,tizenPositionSeconds,toggleTizenPlayback
 import {loadCatalog,saveCatalog,loadGuide,saveGuide as saveGuideDB,deletePlaylistData} from "./core/catalog-db.mjs";
 import { focusFirst, restoreFocus, nextFocus } from "./core/focus.mjs";
 import {parseLgM3U,reclassifyLgItems,auditLgCatalog,mergeLgPlaylist,dedupeLgItems} from "./core/lg-catalog.mjs";
-import {LG_LIBRARY_ROUTES, lgHomeMarkup, lgSecondaryMarkup, lgGroupKey, lgFacets} from "./core/lg-layout.mjs";
-import {lgBrowseModel,lgSeriesGroups,lgMatchSchedule,invalidateLgBrowserIndex,lgIsCategoryBucket,PLATFORM_UNKNOWN} from "./core/lg-browser.mjs";
+import {LG_LIBRARY_ROUTES, lgHomeMarkup, lgSecondaryMarkup, lgGroupKey, lgFacets,lgSymbol} from "./core/lg-layout.mjs";
+import {lgBrowseModel,lgSeriesGroups,lgMatchSchedule,invalidateLgBrowserIndex,lgIsCategoryBucket,lgDisplayBucket,PLATFORM_UNKNOWN,GENRE_UNKNOWN} from "./core/lg-browser.mjs";
 import {lgRail,lgBrowserHeader,lgEpgMarkup,lgMovieMarkup,lgEpisodesMarkup,lgFootballHomeMarkup} from "./core/lg-browser-view.mjs";
 
 const app = document.getElementById("app");
@@ -46,6 +46,7 @@ function invalidateLgCatalog(){
   lgAllowedCache={source:null,unlocked:false,result:null};
 }
 const lgRailQuery={first:"",second:""};
+let lgMovieQuery="";
 const lgRailLimit={first:100,second:120};
 let lgResetSecondScroll=false,lgResetThirdScroll=false;
 let lgPageItems=[], lgRendered=0, lgObserver=null;
@@ -93,7 +94,7 @@ function stats() {
 function persist() { if (!saveState(state)) notice = "O armazenamento local está cheio. Nesta versão de teste use listas menores."; }
 function navigate(next) { if (next === route) return; history.push(route);
   if(lgTv)notice=""; // Success/error notices belong to the originating screen, not subsequent views.
-  if(lgTv && next!=="details"){lgSelectedGroup="__all__";lgRailQuery.first="";lgRailQuery.second="";lgRailLimit.first=100;lgRailLimit.second=120;}
+  if(lgTv && next!=="details"){lgSelectedGroup="__all__";lgRailQuery.first="";lgRailQuery.second="";lgRailLimit.first=100;lgRailLimit.second=120;if(next==="movies")lgMovieQuery="";}
   route = next; search = ""; resetLgPage();render();lgScrollMainTop(); }
 function goBack() { if (currentPlay) { closePlayer(); return; } if (history.length) { route = history.pop(); search = ""; resetLgPage();render();lgScrollMainTop(); } else if (route !== "home") { route = "home"; resetLgPage();render();lgScrollMainTop(); } }
 function pageShell(label) {
@@ -107,6 +108,19 @@ function addCard(item, label = "") {
   const index = displayItems.push(item) - 1;
   const media = safeMedia(item.logo);
   const title = esc(item.title);
+  if(lgTv && route==="movies" && item.type==="movies"){
+    const found=/\(((?:19|20)\d{2})\)\s*$/.exec(item.title||"");
+    const year=found?found[1]:"";
+    const cleanTitle=esc(String(item.title||"").replace(/\s*\((?:19|20)\d{2}\)\s*$/,"").trim());
+    const art=media?'<img loading="lazy" src="'+esc(media)+'" alt="" onerror="this.remove()">':
+      '<span class="lg-v5-film-fallback">'+esc(String(item.title||"F").slice(0,1))+'</span>';
+    return '<button class="card lg-v5-film-card" data-action="item" data-index="'+index+
+      '" data-focus="item-'+index+'" aria-label="Abrir '+title+'">'+
+      '<div class="card-art lg-v5-film-poster">'+art+
+      (year?'<span class="lg-v5-film-year">'+esc(year)+'</span>':"")+'</div>'+
+      '<div class="card-body"><div class="card-title">'+(cleanTitle||title)+'</div>'+
+      '<div class="card-tag">Filme'+(year?" · "+esc(year):"")+'</div></div></button>';
+  }
   return '<button class="card" data-action="item" data-index="' + index + '" data-focus="item-' + index + '" aria-label="Abrir ' + title + '">' +
     '<div class="card-art">' + (media ? '<img loading="lazy" src="' + esc(media) + '" alt="" onerror="this.style.display=\'none\'">' : '<span class="card-letter">' + esc(item.title?.charAt(0) || "A") + '</span>') +
     (label ? '<span class="card-badge">' + esc(label) + '</span>' : "") +
@@ -311,26 +325,30 @@ function lgTripleBrowser(preferredFocus="") {
   let first=[],second=[],firstTitle="",secondTitle="",third="",firstLabel="",secondLabel="";
   if(route==="live"){
     const hasCategories=model.platforms.some(group=>lgIsCategoryBucket(group.key));
-    firstTitle=hasCategories?"Plataformas / categorias":"Plataformas";secondTitle="Canais";
-    first=model.platforms.map(group=>group.key===PLATFORM_UNKNOWN?
-      {...group,label:"Sem plataforma na M3U"}:group);
-    second=model.channels.map(ch=>({key:ch.url,label:ch.title}));
-    firstLabel=hasCategories?"Grupos originais da sua lista":"Escolha a plataforma";
-    secondLabel=model.platform||"Todos os canais";
+    firstTitle=hasCategories?"Categorias e plataformas":"Plataformas";secondTitle="Canais";
+    first=model.platforms.map(group=>({...group,label:group.key===PLATFORM_UNKNOWN?
+      "Outros canais":lgDisplayBucket(group.key)}));
+    second=model.channels.map(ch=>({key:ch.url,label:ch.title,logo:ch.logo||"",kind:"channel"}));
+    firstLabel=hasCategories?"Organizado pelos grupos da playlist":"Escolha a plataforma";
+    secondLabel=lgDisplayBucket(model.platform)||"Todos os canais";
     third=lgEpgMarkup(model,register);
   } else if(route==="movies"){
-    firstTitle="Gêneros";secondTitle="Plataformas";
-    first=model.genres;second=model.platforms;
+    const hasCollections=model.platforms.some(group=>lgIsCategoryBucket(group.key));
+    const hasNamedPlatform=model.platforms.some(group=>group.key!==PLATFORM_UNKNOWN&&!lgIsCategoryBucket(group.key));
+    firstTitle="Gêneros";secondTitle=hasCollections?"Coleções e plataformas":hasNamedPlatform?"Plataformas":"Coleções";
+    first=model.genres.map(group=>({...group,label:group.key===GENRE_UNKNOWN?"Outros gêneros":group.label}));
+    second=model.platforms.map(group=>({...group,label:group.key===PLATFORM_UNKNOWN?
+      "Filmes da sua lista":lgDisplayBucket(group.key)}));
     firstLabel="Selecione o gênero";secondLabel=model.genre||"Escolha um gênero";
-    third=lgMovieMarkup(model,filtered=>cards(filtered));
+    third=lgMovieMarkup(model,filtered=>cards(filtered),lgMovieQuery);
   } else if(route==="series"){
     const hasCategories=model.platforms.some(group=>lgIsCategoryBucket(group.key));
     firstTitle=hasCategories?"Plataformas / coleções":"Plataformas";secondTitle="Séries";
-    first=model.platforms.map(group=>group.key===PLATFORM_UNKNOWN?
-      {...group,label:"Sem plataforma na M3U"}:group);
+    first=model.platforms.map(group=>({...group,label:group.key===PLATFORM_UNKNOWN?
+      "Outras coleções":lgDisplayBucket(group.key)}));
     second=model.shows.map(entry=>({key:entry.key,label:entry.title,count:entry.episodes.length,logo:entry.logo}));
     firstLabel=hasCategories?"Coleções da M3U":"Escolha a plataforma";
-    secondLabel=model.platform||"Todas as séries";
+    secondLabel=lgDisplayBucket(model.platform)||"Todas as séries";
     const fav=model.selected && (state.favorites.includes(itemKey(model.selected,state.activeId)) || state.favorites.includes(lgSeriesKey(model.selected)));
     third=lgEpisodesMarkup(model,register,itemKey(model.selected||{},state.activeId),Boolean(fav));
   }
@@ -351,7 +369,28 @@ function lgTripleBrowser(preferredFocus="") {
   if(thirdPane)thirdPane.scrollTop=lgResetThirdScroll?0:prevThird;
   lgResetSecondScroll=false;lgResetThirdScroll=false;
   restoreFocus(preferredFocus||"lg-first-0");
+  if(route==="live")startLgInlinePreview();
   observeLgPages();
+}
+function startLgInlinePreview(){
+  if(!lgTv||currentPlay)return;
+  const video=app.querySelector(".lg-v5-preview-video");
+  const screen=app.querySelector(".lg-v5-preview-screen");
+  const label=app.querySelector(".lg-v5-preview-state");
+  if(!video||!screen||!label)return;
+  video.muted=true;
+  video.playsInline=true;
+  const setState=(state,text)=>{
+    if(!screen.isConnected)return;
+    screen.dataset.previewState=state;
+    label.textContent=text;
+  };
+  video.addEventListener("playing",()=>setState("playing","Prévia em reprodução"));
+  video.addEventListener("error",()=>setState("error","Prévia indisponível neste dispositivo. Tente tela cheia."));
+  video.addEventListener("stalled",()=>setState("loading","Aguardando o sinal..."));
+  const result=video.play();
+  if(result&&typeof result.catch==="function")
+    result.catch(()=>setState("blocked","Prévia bloqueada neste navegador. Experimente tela cheia."));
 }
 function render(preferredFocus = "") {
   displayItems=[];
@@ -371,7 +410,9 @@ function render(preferredFocus = "") {
   const navPages=lgTv?lgNavPages:pages;
   const nav=navPages.map(([id,label,ico])=>'<button data-action="'+id+'" data-focus="nav-'+id+'" class="'+
     (route===id || (route==="details" && id==="series")?"active":"")+
-    '" aria-current="'+(route===id?"page":"false")+'">'+icon(ico)+'<span>'+esc(label)+'</span></button>').join("");
+    '" aria-current="'+(route===id?"page":"false")+'">'+
+    (lgTv?lgSymbol(({tv:"live",film:"movies",layers:"series",star:"favorites"}[ico]||ico),"lg-v5-sidebar-icon"):icon(ico))+
+    '<span>'+esc(label)+'</span></button>').join("");
   let page = route==="home" ? home() : route==="live" ? catalogue("live","Ao Vivo") :
     route==="movies" ? catalogue("movies","Filmes") : route==="series" ? catalogue("series","Séries") :
     route==="football" ? football() : route==="favorites" ? catalogue("favorites","Favoritos") :
@@ -401,6 +442,11 @@ function startPlayer(item) {
   const url = safeMedia(item.url);
   if (!url) { notice = "Não há URL de reprodução HTTP(S) válida."; render(); return; }
   returnFocusKey = document.activeElement?.dataset.focus || "";
+  // Never keep two live streams decoding when switching from preview to fullscreen.
+  if(lgTv){
+    const inline=app.querySelector(".lg-v5-preview-video");
+    if(inline){inline.pause();inline.removeAttribute("src");inline.load();}
+  }
   currentPlay = item;
   state.recent = [{ ...item, playlistId: state.activeId }, ...state.recent.filter(r => r.url !== item.url)].slice(0,15);
   persist();
@@ -587,6 +633,7 @@ app.addEventListener("click",event=>{
       else selected.series=entry.key;
     }
     if(kind==="first"){lgRailQuery.second="";lgRailLimit.second=120;lgResetSecondScroll=true;}
+    if(route==="movies")lgMovieQuery="";
     lgResetThirdScroll=true;
     resetLgPage();render(target.dataset.focus); 
   }
@@ -634,6 +681,14 @@ app.addEventListener("submit",event=>{
   if(event.target.id.startsWith("pin-")){event.preventDefault();handlePin(event.target);}
 });
 app.addEventListener("input",event=>{
+  if(lgTv&&event.target.dataset.input==="lg-movie-search"){
+    const cursor=event.target.selectionStart;
+    lgMovieQuery=event.target.value;
+    resetLgPage();render("lg-movie-search");
+    const input=app.querySelector('[data-input="lg-movie-search"]');
+    if(input&&cursor!==null)input.setSelectionRange(cursor,cursor);
+    return;
+  }
   if(lgTv&&event.target.dataset.input==="lg-rail-search"){
     const kind=event.target.dataset.kind;
     if(kind==="first"||kind==="second"){

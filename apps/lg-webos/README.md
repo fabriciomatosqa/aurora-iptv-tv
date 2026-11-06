@@ -166,3 +166,24 @@ Para instalar: branch \`feature/lg-webos-catalog-organization-v051\` →
 GitHub Actions → Build LG webOS developer IPK → execução aprovada → artefato
 \`aurora-iptv-tv-lg-simulator-folder\` → extrair → selecionar pasta com
 \`appinfo.json\` no Simulator.
+
+
+## LG webOS 0.5.2 — prévia de canal, logos e novo visual dos filmes
+
+- Ao Vivo mostra o nome da categoria do group-title, sem repetir "Categoria da lista:". Grupos ESPORTES e Esportes são unificados.
+- A coluna de canais mostra o logotipo tvg-logo antes do nome. Se a imagem não existe ou falha, mostra um ícone genérico; não inventa logos.
+- Ao selecionar um canal, o painel da direita oferece prévia 16:9 sem áudio. Selecionar a imagem ou botão Tela cheia abre o player principal.
+- Ao abrir tela cheia, a prévia é pausada e descarregada para não manter duas transmissões simultâneas; ao voltar o painel é reconstruído.
+- A indisponibilidade de reprodução em codecs não suportados é mostrada dentro da mini tela, mantendo opção de abrir o player. O Simulator 26 pode aceitar menos formatos que uma TV LG física.
+- Filmes: pôster 2:3, título, ano quando constar no título M3U e busca de filmes por nome. A segunda coluna usa plataformas ou coleções de origem comprovada, sem suposições.
+- Home, cabeçalhos, lista, botões, guia e menus da LG passam a usar ícones SVG locais mais consistentes.
+- Mudanças exclusivamente LG webOS. Android/Tizen/VIDAA preservados; playlists, favoritos, histórico, PIN e banco permanecem intactos.
+
+### Instalação no Simulator 26
+
+GitHub Actions → Build LG webOS developer IPK → branch feature/lg-webos-channel-preview-movie-ui-v052 →
+execução aprovada → Artifacts → aurora-iptv-tv-lg-simulator-folder. Extraia o ZIP e selecione a pasta contendo appinfo.json pelo botão App do simulator.
+
+### Limitações
+
+A playlist pode não conter logos, ano, gênero, plataforma ou EPG. O aplicativo exibe apenas dados de fato disponíveis; codecs e permissão de reprodução automática exigem validação no hardware LG.

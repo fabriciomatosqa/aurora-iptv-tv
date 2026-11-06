@@ -1,4 +1,5 @@
-import {lgEpisodeParts} from "./lg-browser.mjs";
+import {lgSymbol} from "./lg-layout.mjs";
+import {lgEpisodeParts,lgDisplayBucket} from "./lg-browser.mjs";
 // Semantic LG-only rendering: three columns, no media catalogue data invented.
 const safe=(v)=>String(v??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 const n=v=>Number(v||0).toLocaleString("pt-BR");
@@ -9,15 +10,21 @@ export function lgRail({title,subtitle,items,selectedKey,action,kind,focusPrefix
     !needle||String(item.label||item.title||"").normalize("NFD")
       .replace(/[\u0300-\u036f]/g,"").toLocaleLowerCase("pt-BR").includes(needle));
   const shown=hits.slice(0,limit);
-  const body=shown.length?shown.map(({item,index})=>
-    '<button type="button" class="lg-v4-row'+(item.key===selectedKey?' selected':'')+
-    '" data-action="'+action+'" data-kind="'+kind+'" data-row="'+index+'" data-focus="'+focusPrefix+'-'+index+
-    '" aria-pressed="'+(item.key===selectedKey?'true':'false')+'">'+
-    (item.logo?'<span class="lg-v4-row-art"><img loading="lazy" src="'+safeMedia(item.logo)+'" alt="" onerror="this.parentElement.style.display=\'none\'"></span>':'')+
-    '<span class="lg-v4-row-name">'+safe(item.label||item.title)+'</span>'+
-    (item.count!==undefined?'<span class="lg-v4-count">'+n(item.count)+'</span>':'')+
-    '<span class="lg-v4-row-chevron" aria-hidden="true">›</span></button>').join("") :
-    '<div class="lg-v4-empty-rail">'+(needle?"Nenhum resultado para esta busca.":"Nenhum item disponível")+'</div>';
+  const body=shown.length?shown.map(({item,index})=>{
+    const logo=safeMedia(item.logo);
+    const channel=kind==="second"&&item.kind==="channel";
+    const art=channel?
+      '<span class="lg-v5-channel-logo">'+lgSymbol("live","lg-v5-channel-glyph")+
+      (logo?'<img loading="lazy" src="'+logo+'" alt="" onerror="this.remove()">':"")+'</span>':
+      logo?'<span class="lg-v4-row-art"><img loading="lazy" src="'+logo+'" alt="" onerror="this.parentElement.style.display=\'none\'"></span>':"";
+    return '<button type="button" class="lg-v4-row'+(item.key===selectedKey?' selected':'')+
+      (channel?' lg-v5-channel-row':'')+
+      '" data-action="'+action+'" data-kind="'+kind+'" data-row="'+index+'" data-focus="'+focusPrefix+'-'+index+
+      '" aria-pressed="'+(item.key===selectedKey?'true':'false')+'">'+art+
+      '<span class="lg-v4-row-name">'+safe(item.label||item.title)+'</span>'+
+      (item.count!==undefined?'<span class="lg-v4-count">'+n(item.count)+'</span>':'')+
+      '<span class="lg-v4-row-chevron" aria-hidden="true">'+lgSymbol("arrow","lg-v5-inline-icon")+'</span></button>';
+  }).join(""):'<div class="lg-v4-empty-rail">'+(needle?"Nenhum resultado para esta busca.":"Nenhum item disponível")+'</div>';
   const more=shown.length<hits.length?
     '<button type="button" class="lg-v4-load-more" data-action="lg-rail-more" data-kind="'+kind+
     '" data-focus="lg-more-'+kind+'">Mostrar mais ('+n(hits.length-shown.length)+' restantes)</button>':"";
@@ -39,41 +46,63 @@ export function lgBrowserHeader(route){
     '<span class="lg-v4-brand-mark"></span><span><strong>AURORA</strong><small>IPTV TV</small></span></button>'+
     '<nav class="lg-v4-tabs" aria-label="Navegação principal">'+tabs.map(([id,label])=>
     '<button type="button" data-action="'+id+'" data-focus="nav-'+id+'"'+(route===id?' aria-current="page"':'')+' class="'+(route===id?'active':'')+'">'+label+'</button>').join("")+
-    '</nav><button type="button" class="lg-v4-settings" data-action="settings" data-focus="nav-settings" aria-label="Configurações">⚙</button></header>';
+    '</nav><button type="button" class="lg-v4-settings" data-action="settings" data-focus="nav-settings" aria-label="Configurações">'+lgSymbol("settings","lg-v5-header-icon")+'</button></header>';
 }
 export function lgEpgMarkup(model,register){
   const selected=model.selected;
-  if(!selected)return '<div class="lg-v4-third-empty"><h2>Escolha um canal</h2><p>Selecione uma plataforma e depois um canal para visualizar a programação.</p></div>';
+  if(!selected)return '<div class="lg-v4-third-empty"><h2>Escolha um canal</h2><p>Selecione uma categoria e depois um canal para visualizar a programação.</p></div>';
   const index=register(selected);
   const {schedule}=model;
   const programme=p=>'<div class="lg-v4-epg-row"><div class="lg-v4-epg-hour">'+clock(p.start)+'</div>'+
     '<div class="lg-v4-epg-title">'+safe(p.title)+'</div>'+
     (p.description?'<p>'+safe(p.description)+'</p>':'')+'</div>';
+  const poster=safeMedia(selected.logo);
+  const media=safeMedia(selected.url);
+  const preview='<section class="lg-v5-preview" aria-label="Prévia do canal">'+
+    '<div class="lg-v5-preview-screen" data-preview-state="loading">'+
+    (poster?'<img class="lg-v5-preview-poster" src="'+poster+'" alt="" onerror="this.remove()">':"")+
+    (media?'<video class="lg-v5-preview-video" muted playsinline preload="metadata" src="'+media+'" aria-label="Prévia do canal sem áudio"></video>':"")+
+    '<span class="lg-v5-live-pill"><span class="lg-v5-live-dot"></span> PRÉVIA · SEM ÁUDIO</span>'+
+    '<div class="lg-v5-preview-state" role="status">Carregando prévia...</div>'+
+    '<button type="button" class="lg-v5-preview-open" data-action="item" data-index="'+index+
+      '" data-focus="lg-play" aria-label="Abrir '+safe(selected.title)+' em tela cheia">'+
+      lgSymbol("fullscreen","lg-v5-preview-button-icon")+'<span>Tela cheia</span></button>'+
+    '</div><p class="lg-v5-preview-hint">Selecione o canal para assistir à prévia. Pressione OK na imagem para abrir em tela cheia.</p>'+
+    '</section>';
   return '<div class="lg-v4-third-title"><span class="lg-v4-overline">CANAL SELECIONADO</span>'+
-    '<h2>'+safe(selected.title)+'</h2><p>'+safe(model.platform)+'</p></div>'+
-    '<button class="lg-v4-play" data-action="item" data-index="'+index+'" data-focus="lg-play">▶ Assistir canal</button>'+
-    '<h3 class="lg-v4-section-label">Guia de programação</h3>'+
+    '<h2>'+safe(selected.title)+'</h2><p>'+safe(lgDisplayBucket(model.platform))+'</p></div>'+
+    preview+'<h3 class="lg-v4-section-label">'+lgSymbol("guide","lg-v5-section-icon")+' Guia de programação</h3>'+
     (!schedule.now&&!schedule.next.length?
-      '<div class="lg-v4-no-epg"><span class="lg-v4-no-epg-icon">▦</span><h4>Programação indisponível</h4>'+
+      '<div class="lg-v4-no-epg"><span class="lg-v4-no-epg-icon">'+lgSymbol("guide","lg-v5-empty-icon")+'</span><h4>Programação indisponível</h4>'+
       '<p>Este canal ainda não possui um guia de programação associado. Você pode assistir normalmente ou adicionar um XMLTV.</p>'+
       '<button type="button" data-action="settings" data-focus="lg-epg-settings">Configurar EPG ›</button></div>':
       (schedule.now?'<div class="lg-v4-epg-now"><span class="lg-v4-onair">NO AR</span>'+programme(schedule.now)+'</div>':'')+
       (schedule.next.length?'<div class="lg-v4-epg-list">'+schedule.next.map(programme).join("")+'</div>':''));
 }
-export function lgMovieMarkup(model,cards){
-  return '<div class="lg-v4-third-title"><span class="lg-v4-overline">FILMES</span><h2>'+safe(model.genre)+'</h2>'+
-   '<p>'+safe(model.platform)+' · '+n(model.movies.length)+' filmes</p></div>'+
-   (model.movies.length?cards(model.movies):
-    '<div class="lg-v4-third-empty">Nenhum filme corresponde aos filtros.</div>');
+export function lgMovieMarkup(model,cards,query=""){
+  const normalized=String(query||"").normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLocaleLowerCase("pt-BR");
+  const shown=normalized?model.movies.filter(item=>
+    String(item.title||"").normalize("NFD").replace(/[\u0300-\u036f]/g,"")
+      .toLocaleLowerCase("pt-BR").includes(normalized)):model.movies;
+  const genre=model.genre==="Gênero não informado"?"Outros filmes":model.genre;
+  const platform=model.platform==="Plataforma não informada"?"Da sua lista":lgDisplayBucket(model.platform);
+  return '<div class="lg-v4-third-title lg-v5-movie-heading"><span class="lg-v4-overline">BIBLIOTECA DE FILMES</span>'+
+   '<h2>'+safe(genre)+'</h2><p>'+safe(platform)+' · '+n(model.movies.length)+' títulos disponíveis</p></div>'+
+   (model.movies.length>6?'<label class="lg-v5-movie-search-label" for="lg-movie-search">'+
+      lgSymbol("movies","lg-v5-search-icon")+
+      '<input id="lg-movie-search" type="search" data-input="lg-movie-search" data-focus="lg-movie-search"'+
+      ' placeholder="Buscar filme pelo título..." value="'+safe(query)+'" aria-label="Buscar filme pelo título"></label>':"")+
+   (shown.length?cards(shown):'<div class="lg-v4-third-empty">'+
+     (normalized?"Nenhum filme encontrado para esta busca.":"Nenhum filme corresponde aos filtros.")+'</div>');
 }
 export function lgEpisodesMarkup(model,register,favoriteKey,isFavorite){
   if(!model.selected)return '<div class="lg-v4-third-empty"><h2>Escolha uma série</h2><p>Os episódios aparecerão aqui.</p></div>';
   const entry=model.selected;
   let lastSeason=null;
   return '<div class="lg-v4-third-title"><span class="lg-v4-overline">SÉRIE SELECIONADA</span><h2>'+safe(entry.title)+'</h2>'+
-    '<p>'+n(model.episodes.length)+' episódios · '+safe(model.platform)+'</p></div>'+
+    '<p>'+n(model.episodes.length)+' episódios · '+safe(lgDisplayBucket(model.platform))+'</p></div>'+
     '<button type="button" class="lg-v4-favorite" data-action="lg-series-favorite" data-focus="lg-series-favorite">'+
-      (isFavorite?"★ Remover dos favoritos":"☆ Favoritar série")+'</button>'+
+      lgSymbol("favorites","lg-v5-inline-icon")+(isFavorite?" Remover dos favoritos":" Favoritar série")+'</button>'+
     '<h3 class="lg-v4-section-label">Episódios</h3>'+
     (model.episodes.length?'<div class="lg-v4-episodes">'+model.episodes.map((ep,i)=>{
       const index=register(ep);
@@ -84,7 +113,7 @@ export function lgEpisodesMarkup(model,register,favoriteKey,isFavorite){
       return heading+'<button type="button" class="lg-v4-episode" data-action="item" data-index="'+index+'" data-focus="lg-episode-'+i+'">'+
         '<span class="lg-v4-episode-number">'+String(i+1).padStart(2,"0")+'</span>'+
         '<span class="lg-v4-episode-details"><strong>'+safe(ep.title)+'</strong><small>'+safe(ep.group)+'</small></span>'+
-        '<span class="lg-v4-episode-play">▶</span></button>';
+        '<span class="lg-v4-episode-play">'+lgSymbol("play","lg-v5-inline-icon")+'</span></button>';
     }).join("")+'</div>':'<p>Nenhum episódio válido nesta série.</p>');
 }
 export function lgFootballHomeMarkup(matches,register) {

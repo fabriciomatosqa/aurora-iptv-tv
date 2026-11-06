@@ -1,5 +1,15 @@
 # Registro de alterações — AURORA IPTV TV
 
+## 0.5.2 — LG webOS (06/11/2026)
+
+- Categorias limpas, capitalização normalizada e logos ao lado dos canais.
+- Prévia 16:9 silenciada, tela cheia por controle remoto e fallback de codec.
+- Filmes com pôsteres 2:3, ano presente no título, busca e coleções M3U.
+- Ícones SVG consistentes na Home, navegação e reprodução.
+- Testes de prévia, logos, categorias e busca de filmes.
+
+
+
 ## 0.5.1 — LG webOS: catálogo organizado por fontes da M3U
 
 - **Canal [24H]:** transmissões lineares com o marcador explícito [24H] deixam de aparecer como episódios e passam para Ao Vivo, mesmo quando o grupo do provedor é chamado "Séries".
