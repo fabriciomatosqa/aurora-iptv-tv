@@ -13,7 +13,7 @@ export function lgKnownBrandLogo(item){
 }
 export function lgChannelStem(title){
   let value=String(title||"").trim();
-  const quality=/(?:\s+|\s*[\[(])(?:FHD|HD|SD|UHD|4K|8K|H[.\s-]?265|H[.\s-]?264|HEVC|ALT|BACKUP)(?:[\])])?\s*$/i;
+  const quality=/(?:\s+(?:FHD|HD|SD|UHD|4K|8K|H[.\s-]?265|H[.\s-]?264|HEVC|ALT|BACKUP)|\s*[\[(](?:FHD|HD|SD|UHD|4K|8K|H[.\s-]?265|H[.\s-]?264|HEVC|ALT|BACKUP)[\])])\s*$/i;
   for(let i=0;i<5;i++){
     const next=value.replace(quality,"").trim();
     if(next===value)break;
@@ -23,12 +23,24 @@ export function lgChannelStem(title){
 }
 // Prefer: 1. individual channel icon; 2. another bitrate variant's same-brand
 // icon from the same provider catalogue; 3. verified national broadcaster mark.
+const siblingCache=new WeakMap();
+function siblingLogoIndex(channels){
+  if(!Array.isArray(channels))return new Map();
+  const existing=siblingCache.get(channels);
+  if(existing)return existing;
+  const index=new Map();
+  for(const channel of channels){
+    if(!/^https?:\/\//i.test(channel?.logo||""))continue;
+    const stem=lgChannelStem(channel.title);
+    if(stem&&!index.has(stem))index.set(stem,channel.logo);
+  }
+  siblingCache.set(channels,index);
+  return index;
+}
 export function lgChannelLogos(channel,channels){
   const primary=String(channel?.logo||"").trim();
-  const stem=lgChannelStem(channel?.title);
-  const sibling=Array.isArray(channels)?channels.find(c=>
-    c!==channel && lgChannelStem(c?.title)===stem && /^https?:\/\//i.test(c?.logo||"")):null;
+  const sibling=siblingLogoIndex(channels).get(lgChannelStem(channel?.title))||"";
   const known=lgKnownBrandLogo(channel);
-  return {primary:primary||String(sibling?.logo||"").trim()||known,
-    fallback:primary||sibling?.logo?known:"",known:!!known};
+  return {primary:primary||sibling||known,
+    fallback:(primary||sibling)?known:"",known:!!known};
 }
