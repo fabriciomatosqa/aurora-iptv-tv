@@ -8,10 +8,12 @@ import {remoteKey,registerRemoteKeys} from "./core/remote.mjs";
 import {hasTizenPlayer,startTizenPlayer,tizenPositionSeconds,toggleTizenPlayback,seekTizen,stopTizenPlayer} from "./core/tizen-player.mjs";
 import {loadCatalog,saveCatalog,loadGuide,saveGuide as saveGuideDB,deletePlaylistData} from "./core/catalog-db.mjs";
 import { focusFirst, restoreFocus, nextFocus } from "./core/focus.mjs";
-import {parseLgM3U,reclassifyLgItems,auditLgCatalog,mergeLgPlaylist,dedupeLgItems} from "./core/lg-catalog.mjs";
+import {parseLgM3U,reclassifyLgItems,auditLgCatalog,mergeLgPlaylist,dedupeLgItems,lgUnknownGroupSummary} from "./core/lg-catalog.mjs";
 import {LG_LIBRARY_ROUTES, lgHomeMarkup, lgSecondaryMarkup, lgGroupKey, lgFacets,lgSymbol} from "./core/lg-layout.mjs";
-import {lgBrowseModel,lgSeriesGroups,lgMatchSchedule,invalidateLgBrowserIndex,lgIsCategoryBucket,lgDisplayBucket,PLATFORM_UNKNOWN,GENRE_UNKNOWN} from "./core/lg-browser.mjs";
+import {lgBrowseModel,lgSeriesGroups,lgMatchSchedule,invalidateLgBrowserIndex,lgIsCategoryBucket,lgDisplayBucket,lgMovieDisplayParts,PLATFORM_UNKNOWN,GENRE_UNKNOWN} from "./core/lg-browser.mjs";
 import {lgRail,lgBrowserHeader,lgEpgMarkup,lgMovieMarkup,lgEpisodesMarkup,lgFootballHomeMarkup} from "./core/lg-browser-view.mjs";
+import {lgChannelLogos} from "./core/lg-channel-logos.mjs";
+import {lgMediaKind,lgHlsAlternative,lgMediaErrorText} from "./core/lg-media.mjs";
 
 const app = document.getElementById("app");
 const playerRoot = document.getElementById("player-root");
@@ -109,9 +111,9 @@ function addCard(item, label = "") {
   const media = safeMedia(item.logo);
   const title = esc(item.title);
   if(lgTv && route==="movies" && item.type==="movies"){
-    const found=/\(((?:19|20)\d{2})\)\s*$/.exec(item.title||"");
-    const year=found?found[1]:"";
-    const cleanTitle=esc(String(item.title||"").replace(/\s*\((?:19|20)\d{2}\)\s*$/,"").trim());
+    const film=lgMovieDisplayParts(item);
+    const year=film.year;
+    const cleanTitle=esc(film.title);
     const art=media?'<img loading="lazy" src="'+esc(media)+'" alt="" onerror="this.remove()">':
       '<span class="lg-v5-film-fallback">'+esc(String(item.title||"F").slice(0,1))+'</span>';
     return '<button class="card lg-v5-film-card" data-action="item" data-index="'+index+
@@ -328,18 +330,24 @@ function lgTripleBrowser(preferredFocus="") {
     firstTitle=hasCategories?"Categorias e plataformas":"Plataformas";secondTitle="Canais";
     first=model.platforms.map(group=>({...group,label:group.key===PLATFORM_UNKNOWN?
       "Outros canais":lgDisplayBucket(group.key)}));
-    second=model.channels.map(ch=>({key:ch.url,label:ch.title,logo:ch.logo||"",kind:"channel"}));
+    second=model.channels.map(ch=>{
+      const logos=lgChannelLogos(ch,model.channels);
+      return {key:ch.url,label:ch.title,logo:logos.primary,logoFallback:logos.fallback,kind:"channel"};
+    });
     firstLabel=hasCategories?"Organizado pelos grupos da playlist":"Escolha a plataforma";
     secondLabel=lgDisplayBucket(model.platform)||"Todos os canais";
     third=lgEpgMarkup(model,register);
   } else if(route==="movies"){
     const hasCollections=model.platforms.some(group=>lgIsCategoryBucket(group.key));
     const hasNamedPlatform=model.platforms.some(group=>group.key!==PLATFORM_UNKNOWN&&!lgIsCategoryBucket(group.key));
-    firstTitle="Gêneros";secondTitle=hasCollections?"Coleções e plataformas":hasNamedPlatform?"Plataformas":"Coleções";
-    first=model.genres.map(group=>({...group,label:group.key===GENRE_UNKNOWN?"Outros gêneros":group.label}));
+    const firstHasCollections=model.genres.some(group=>lgIsCategoryBucket(group.key));
+    firstTitle=firstHasCollections?"Gêneros e coleções":"Gêneros";
+    secondTitle=hasCollections?"Coleções e plataformas":hasNamedPlatform?"Plataformas":"Origem";
+    first=model.genres.map(group=>({...group,label:group.key===GENRE_UNKNOWN?
+      "Sem gênero na lista":lgDisplayBucket(group.label)}));
     second=model.platforms.map(group=>({...group,label:group.key===PLATFORM_UNKNOWN?
-      "Filmes da sua lista":lgDisplayBucket(group.key)}));
-    firstLabel="Selecione o gênero";secondLabel=model.genre||"Escolha um gênero";
+      "Da playlist":lgDisplayBucket(group.key)}));
+    firstLabel="Selecione o gênero";secondLabel=lgDisplayBucket(model.genre)||"Escolha uma categoria";
     third=lgMovieMarkup(model,filtered=>cards(filtered),lgMovieQuery);
   } else if(route==="series"){
     const hasCategories=model.platforms.some(group=>lgIsCategoryBucket(group.key));
