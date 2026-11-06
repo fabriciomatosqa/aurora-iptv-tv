@@ -1,3 +1,4 @@
+import {lgEpisodeParts} from "./lg-browser.mjs";
 // Semantic LG-only rendering: three columns, no media catalogue data invented.
 const safe=(v)=>String(v??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 const n=v=>Number(v||0).toLocaleString("pt-BR");
@@ -68,6 +69,7 @@ export function lgMovieMarkup(model,cards){
 export function lgEpisodesMarkup(model,register,favoriteKey,isFavorite){
   if(!model.selected)return '<div class="lg-v4-third-empty"><h2>Escolha uma série</h2><p>Os episódios aparecerão aqui.</p></div>';
   const entry=model.selected;
+  let lastSeason=null;
   return '<div class="lg-v4-third-title"><span class="lg-v4-overline">SÉRIE SELECIONADA</span><h2>'+safe(entry.title)+'</h2>'+
     '<p>'+n(model.episodes.length)+' episódios · '+safe(model.platform)+'</p></div>'+
     '<button type="button" class="lg-v4-favorite" data-action="lg-series-favorite" data-focus="lg-series-favorite">'+
@@ -75,7 +77,11 @@ export function lgEpisodesMarkup(model,register,favoriteKey,isFavorite){
     '<h3 class="lg-v4-section-label">Episódios</h3>'+
     (model.episodes.length?'<div class="lg-v4-episodes">'+model.episodes.map((ep,i)=>{
       const index=register(ep);
-      return '<button type="button" class="lg-v4-episode" data-action="item" data-index="'+index+'" data-focus="lg-episode-'+i+'">'+
+      const parts=lgEpisodeParts(ep);
+      const heading=parts&&parts.season!==lastSeason?
+        '<h4 class="lg-v4-season-heading">Temporada '+parts.season+'</h4>':"";
+      lastSeason=parts?.season??null;
+      return heading+'<button type="button" class="lg-v4-episode" data-action="item" data-index="'+index+'" data-focus="lg-episode-'+i+'">'+
         '<span class="lg-v4-episode-number">'+String(i+1).padStart(2,"0")+'</span>'+
         '<span class="lg-v4-episode-details"><strong>'+safe(ep.title)+'</strong><small>'+safe(ep.group)+'</small></span>'+
         '<span class="lg-v4-episode-play">▶</span></button>';
