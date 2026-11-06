@@ -1,14 +1,21 @@
 // LG webOS TV layout helpers. Rendered only when <body class="lg-tv">.
 // The shared Android, Samsung and desktop experiences are not redesigned here.
+// Original, consistent stroke icons for ten-foot navigation.
 const GLYPHS={
-  live:'<rect x="4" y="5" width="24" height="17" rx="3"/><path d="M9 29h14M16 22v7M10 11l8 4-8 4z"/>',
-  movies:'<rect x="5" y="8" width="23" height="20" rx="3"/><path d="m6 8 19-5 2 6-20 5M12 15v8l7-4z"/>',
-  series:'<rect x="7" y="5" width="21" height="22" rx="3"/><path d="M3 23V5a2 2 0 0 1 2-2h17M13 12l9 5-9 5z"/>',
-  favorites:'<path d="m16 3 4.1 8.7 9.4 1.2-6.9 6.6 1.7 9.4L16 24.4l-8.3 4.5 1.7-9.4-6.9-6.6 9.4-1.2z"/>',
-  history:'<circle cx="16" cy="17" r="12"/><path d="M16 9v9l6 4M4 6v8h8"/>',
-  football:'<circle cx="16" cy="16" r="12"/><path d="m11 14 5-4 5 4-2 7h-6zM16 4v6M5 14l6 0M27 14l-6 0M9 26l4-5m10 5-4-5"/>',
-  settings:'<circle cx="16" cy="16" r="4"/><path d="m16 3 3 2 4-.4 1.6 3.7 3.8 2-1 4 1 3.7-3.4 2.7-.7 4-4 .4-3.3 2.7-3.3-2.7-4-.4-.7-4L5.6 18l1-3.7-1-4 3.8-2L11 4.6 15 5z"/>',
-  arrow:'<path d="m12 8 9 8-9 8M21 16H7"/>'
+  live:'<rect x="4" y="6" width="24" height="18" rx="3"/><path d="M11 28h10M16 24v4"/><path d="m13 11 8 4-8 4z"/>',
+  movies:'<rect x="5" y="11" width="22" height="17" rx="3"/><path d="M5 12 26 7l-2-5-21 5 2 5M9 10l3-5m5 4 3-5"/><path d="m14 16 7 4-7 4z"/>',
+  series:'<rect x="6" y="9" width="22" height="19" rx="3"/><path d="M2 23V7a3 3 0 0 1 3-3h17"/><path d="m14 15 7 4-7 4z"/>',
+  favorites:'<path d="m16 3 4.1 8.4 9.3 1.4-6.7 6.6 1.6 9.2L16 24.3l-8.3 4.3 1.6-9.2-6.7-6.6 9.3-1.4z"/>',
+  history:'<circle cx="16" cy="16" r="12"/><path d="M16 8v9l6 3"/><path d="M8 7 5 10l-3-3"/>',
+  football:'<circle cx="16" cy="16" r="12"/><path d="m12 13 4-3 4 3-1.5 5h-5zM16 4v6M6 13l6 0m8 0h6M9 25l4.5-7m9.5 7-4.5-7"/>',
+  settings:'<circle cx="16" cy="16" r="4"/><path d="M13 3h6l.7 3.7 3.2 1.9 3.6-1.2 3 5.2-2.8 2.5v3.8l2.8 2.5-3 5.2-3.6-1.2-3.2 1.9L19 30h-6l-.7-3.7-3.2-1.9-3.6 1.2-3-5.2 2.8-2.5v-3.8l-2.8-2.5 3-5.2 3.6 1.2 3.2-1.9z"/>',
+  arrow:'<path d="m13 9 7 7-7 7"/>',
+  play:'<path d="m12 8 12 8-12 8z"/>',
+  fullscreen:'<path d="M5 12V5h7m8 0h7v7m0 8v7h-7M12 27H5v-7"/>',
+  guide:'<rect x="4" y="6" width="24" height="22" rx="3"/><path d="M10 3v6M22 3v6M4 14h24M10 19h5M10 23h10"/>',
+  folder:'<path d="M3 9a3 3 0 0 1 3-3h8l3 3h9a3 3 0 0 1 3 3v13a3 3 0 0 1-3 3H6a3 3 0 0 1-3-3z"/>',
+  video:'<rect x="4" y="7" width="20" height="18" rx="3"/><path d="m24 13 6-4v14l-6-4"/>',
+  info:'<circle cx="16" cy="16" r="12"/><path d="M16 14v8m0-13v1"/>'
 };
 export const LG_LIBRARY_ROUTES=new Set(["live","movies","series","favorites","history","unknown"]);
 export function lgSymbol(name, cls="lg-icon"){
