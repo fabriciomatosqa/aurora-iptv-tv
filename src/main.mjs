@@ -100,7 +100,7 @@ function navigate(next) { if (next === route) return; history.push(route);
   route = next; search = ""; resetLgPage();render();lgScrollMainTop(); }
 function goBack() { if (currentPlay) { closePlayer(); return; } if (history.length) { route = history.pop(); search = ""; resetLgPage();render();lgScrollMainTop(); } else if (route !== "home") { route = "home"; resetLgPage();render();lgScrollMainTop(); } }
 function pageShell(label) {
-  return '<div class="topbar"><div class="eyebrow">' + esc(label) + '</div><div class="topright">AURORA IPTV TV · PRÉVIA 0.2.0</div></div>';
+  return '<div class="topbar"><div class="eyebrow">' + esc(label) + '</div><div class="topright">AURORA IPTV TV · PRÉVIA '+(lgTv?"LG 0.5.3":"0.2.0")+'</div></div>';
 }
 function empty(title, description, action = "") {
   return '<div class="empty"><h3>' + esc(title) + '</h3><p>' + esc(description) + '</p>' +
