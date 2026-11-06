@@ -131,7 +131,10 @@ export function lgUnknownGroupSummary(items,limit=12){
   for(const item of items||[]){
     if(item.type!=="unknown")continue;
     total++;
-    const group=String(item.group||"").trim()||"Sem grupo";
+    const group=(String(item.group||"").trim()||"Sem grupo")
+      .replace(/https?:\/\/[^\s,;|]+/gi,"[URL omitida]")
+      .replace(/\b(username|password|token|access[_-]?key|pass)\s*[=:]\s*[^\s,;|]+/gi,"$1=[omitido]")
+      .slice(0,120);
     groups.set(group,(groups.get(group)||0)+1);
   }
   return {total,groups:[...groups.entries()]
