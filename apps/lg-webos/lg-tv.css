@@ -1715,6 +1715,7 @@ body.lg-tv .lg-source-groups>div{
   color:#e4f7f9;font-size:15px;
 }
 body.lg-tv .lg-source-groups>div strong{color:#92f2d3;font-size:15px;}
+body.lg-tv .lg-player-error.lg-media-diagnostics{pointer-events:auto;}
 body.lg-tv .lg-media-diagnostics{
   display:flex;flex-wrap:wrap;align-items:center;justify-content:center;gap:12px;
   padding:14px 16px;line-height:1.5;
