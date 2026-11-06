@@ -14,7 +14,7 @@ const GENRES=[
   "Ação","Aventura","Animação","Anime","Animes","Comédia","Documentário","Documentários",
   "Drama","Dramas","Ficção Científica","Fantasia","Terror","Suspense","Romance",
   "Românticos","Família","Infantil","Musical","Crime","Policial","História","Biografia",
-  "Guerra","Faroeste","Esportes","Religioso","Dorama","Doramas"
+  "Guerra","Faroeste","Esportes","Religioso","Dorama","Doramas","Ficção"
 ];
 const PLATFORM_UNKNOWN="Plataforma não informada";
 const CATEGORY_PREFIX="Categoria da lista: ";
@@ -171,12 +171,36 @@ function lgMovieSource(item){
   const actual=segments.at(-1)||"";
   return actual?CATEGORY_PREFIX+lgNormalizeGroupName(actual):PLATFORM_UNKNOWN;
 }
+// Film display is metadata-only: do not rewrite original IPTV title/URL.
+export function lgMovieDisplayParts(item){
+  let title=String(item?.title||"").trim(),year="",quality="";
+  // Providers often append "(2026) [Cinema]", "[Cinema] (2026)" or "[L]".
+  for(let i=0;i<6;i++){
+    const tag=/\s*\[(CINEMA|FILMES?|VOD|L|LEG|DUB|FHD|HD|SD)\]\s*$/i.exec(title);
+    if(tag){
+      if(!quality&&/^(?:LEG|DUB|FHD|HD|SD)$/i.test(tag[1]))quality=tag[1].toUpperCase();
+      title=title.slice(0,tag.index).trim();
+      continue;
+    }
+    const y=/\s*\(((?:19|20)\d{2})\)\s*$/.exec(title);
+    if(y){year=y[1];title=title.slice(0,y.index).trim();continue;}
+    break;
+  }
+  return {title:title||String(item?.title||"").trim(),year,quality};
+}
 function indexMovies(index){
   if(index.movies)return index.movies;
   const byGenre=new Map();
   for(const item of index.items){
     if(item.type!=="movies")continue;
-    const genre=lgGenre(item),platform=lgMovieSource(item);
+    const classifiedGenre=lgGenre(item),source=lgMovieSource(item);
+    const titleCollection=/(?:^|\s)\[Cinema\](?:\s|$)/i.test(item.title||"")?CATEGORY_PREFIX+"Cinema":"";
+    // First rail: real genre, or an explicit IPTV collection when genre is absent.
+    // Second rail: real platform, or a distinct source collection if available.
+    const genre=classifiedGenre!==GENRE_UNKNOWN?classifiedGenre:
+      lgIsCategoryBucket(source)?source:titleCollection||GENRE_UNKNOWN;
+    const platform=lgPlatform(item)!==PLATFORM_UNKNOWN?lgPlatform(item):
+      source!==genre?source:PLATFORM_UNKNOWN;
     if(!byGenre.has(genre))byGenre.set(genre,new Map());
     const byPlatform=byGenre.get(genre);
     if(!byPlatform.has(platform))byPlatform.set(platform,[]);
