@@ -10,7 +10,7 @@ import {loadCatalog,saveCatalog,loadGuide,saveGuide as saveGuideDB,deletePlaylis
 import { focusFirst, restoreFocus, nextFocus } from "./core/focus.mjs";
 import {parseLgM3U,reclassifyLgItems,auditLgCatalog,mergeLgPlaylist,dedupeLgItems} from "./core/lg-catalog.mjs";
 import {LG_LIBRARY_ROUTES, lgHomeMarkup, lgSecondaryMarkup, lgGroupKey, lgFacets} from "./core/lg-layout.mjs";
-import {lgBrowseModel,lgSeriesGroups,lgMatchSchedule,invalidateLgBrowserIndex} from "./core/lg-browser.mjs";
+import {lgBrowseModel,lgSeriesGroups,lgMatchSchedule,invalidateLgBrowserIndex,lgIsCategoryBucket,PLATFORM_UNKNOWN} from "./core/lg-browser.mjs";
 import {lgRail,lgBrowserHeader,lgEpgMarkup,lgMovieMarkup,lgEpisodesMarkup,lgFootballHomeMarkup} from "./core/lg-browser-view.mjs";
 
 const app = document.getElementById("app");
@@ -310,10 +310,13 @@ function lgTripleBrowser(preferredFocus="") {
   const prevThird=app.querySelector(".lg-v4-third")?.scrollTop||0;
   let first=[],second=[],firstTitle="",secondTitle="",third="",firstLabel="",secondLabel="";
   if(route==="live"){
-    firstTitle="Plataformas";secondTitle="Canais";
-    first=model.platforms;
+    const hasCategories=model.platforms.some(group=>lgIsCategoryBucket(group.key));
+    firstTitle=hasCategories?"Plataformas / categorias":"Plataformas";secondTitle="Canais";
+    first=model.platforms.map(group=>group.key===PLATFORM_UNKNOWN?
+      {...group,label:"Sem plataforma na M3U"}:group);
     second=model.channels.map(ch=>({key:ch.url,label:ch.title}));
-    firstLabel="Escolha a plataforma";secondLabel=model.platform||"Nenhuma plataforma";
+    firstLabel=hasCategories?"Grupos originais da sua lista":"Escolha a plataforma";
+    secondLabel=model.platform||"Todos os canais";
     third=lgEpgMarkup(model,register);
   } else if(route==="movies"){
     firstTitle="Gêneros";secondTitle="Plataformas";
@@ -321,10 +324,13 @@ function lgTripleBrowser(preferredFocus="") {
     firstLabel="Selecione o gênero";secondLabel=model.genre||"Escolha um gênero";
     third=lgMovieMarkup(model,filtered=>cards(filtered));
   } else if(route==="series"){
-    firstTitle="Plataformas";secondTitle="Séries";
-    first=model.platforms;
+    const hasCategories=model.platforms.some(group=>lgIsCategoryBucket(group.key));
+    firstTitle=hasCategories?"Plataformas / coleções":"Plataformas";secondTitle="Séries";
+    first=model.platforms.map(group=>group.key===PLATFORM_UNKNOWN?
+      {...group,label:"Sem plataforma na M3U"}:group);
     second=model.shows.map(entry=>({key:entry.key,label:entry.title,count:entry.episodes.length,logo:entry.logo}));
-    firstLabel="Escolha a plataforma";secondLabel=model.platform||"Escolha uma plataforma";
+    firstLabel=hasCategories?"Coleções da M3U":"Escolha a plataforma";
+    secondLabel=model.platform||"Todas as séries";
     const fav=model.selected && (state.favorites.includes(itemKey(model.selected,state.activeId)) || state.favorites.includes(lgSeriesKey(model.selected)));
     third=lgEpisodesMarkup(model,register,itemKey(model.selected||{},state.activeId),Boolean(fav));
   }
