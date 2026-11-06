@@ -183,3 +183,13 @@ test("LG reports top unknown source groups without exposing URLs or secrets",()=
   assert.deepEqual(result.groups,[{name:"FILMES E SÉRIES",count:2},{name:"Sem metadados",count:1}]);
   assert.doesNotMatch(JSON.stringify(result),/secret|password|credential/i);
 });
+
+test("LG audit redacts accidental tokens inside provider group titles",()=>{
+  const result=lgUnknownGroupSummary([
+    {title:"X",type:"unknown",group:"Filmes password=example-secret"},
+    {title:"Y",type:"unknown",group:"https://example.test/private-key?token=secret"}
+  ]);
+  assert.equal(result.total,2);
+  assert.doesNotMatch(JSON.stringify(result),/example-secret|private-key|token=secret/);
+  assert.match(JSON.stringify(result),/\[omitido\]|\[URL omitida\]/);
+});
