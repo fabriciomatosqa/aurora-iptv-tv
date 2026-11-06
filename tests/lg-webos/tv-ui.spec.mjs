@@ -260,11 +260,61 @@ test("LG uses source group categories when Live platform cannot be verified",asy
     entry("Canais | Esportes","Canal Esporte 2","https://example.test/live/s2.m3u8")
   ],"Canais com grupos reais");
   await page.locator('[data-focus="nav-live"]').click();
-  await expect(page.locator(".lg-v4-rail").first()).toContainText("Plataformas / categorias");
-  await expect(page.locator(".lg-v4-rail").first()).toContainText("Categoria da lista: Esportes");
-  await expect(page.locator(".lg-v4-rail").first()).toContainText("Categoria da lista: Notícias");
+  await expect(page.locator(".lg-v4-rail").first()).toContainText("Categorias e plataformas");
+  await expect(page.locator(".lg-v4-rail").first()).toContainText("Esportes");
+  await expect(page.locator(".lg-v4-rail").first()).toContainText("Notícias");
   await expect(page.locator(".lg-v4-rail").nth(1).locator(".lg-v4-row")).toHaveCount(2);
-  await page.locator(".lg-v4-rail").first().getByRole("button",{name:/Categoria da lista: Notícias/}).click();
+  await page.locator(".lg-v4-rail").first().getByRole("button",{name:/Notícias/}).click();
   await expect(page.locator(".lg-v4-rail").nth(1).locator(".lg-v4-row")).toHaveCount(1);
   await expect(page.locator(".lg-v4-third")).toContainText("Canal Jornal 1");
+});
+
+
+test("LG category rows display simple names and combine uppercase provider duplicates",async({page})=>{
+  await importM3U(page,[
+    entry("Canais | ESPORTES","Canal Um","https://example.test/live/um.m3u8"),
+    entry("Canais | Esportes","Canal Dois","https://example.test/live/dois.m3u8"),
+    entry("Canais | Notícias","Canal Três","https://example.test/live/tres.m3u8")
+  ],"Grupos normalizados");
+  await page.locator('[data-focus="nav-live"]').click();
+  const groups=page.locator(".lg-v4-rail").first().locator(".lg-v4-row");
+  await expect(groups).toHaveCount(2);
+  await expect(groups.first()).toContainText("Esportes");
+  await expect(groups.first()).not.toContainText("Categoria da lista:");
+  await expect(page.locator(".lg-v4-rail").nth(1).locator(".lg-v4-row")).toHaveCount(2);
+});
+test("LG selected channel has a logo, muted inline preview, and TV remote fullscreen action",async({page})=>{
+  await importM3U(page,[
+    '#EXTINF:-1 group-title="Canais | Notícias" tvg-logo="https://example.test/logo-globo.png",GLOBO BAHIA FHD\nhttps://example.test/live/globo.m3u8'
+  ],"Canais com logos");
+  await page.locator('[data-focus="nav-live"]').click();
+  const channel=page.locator(".lg-v5-channel-row").first();
+  await expect(channel.locator(".lg-v5-channel-logo img")).toHaveAttribute("src","https://example.test/logo-globo.png");
+  await channel.click();
+  const preview=page.locator(".lg-v5-preview-video");
+  await expect(preview).toHaveAttribute("src","https://example.test/live/globo.m3u8");
+  await expect(preview).toHaveAttribute("muted","");
+  await expect(preview).toHaveAttribute("playsinline","");
+  await expect(page.locator(".lg-v5-preview-open")).toContainText("Tela cheia");
+  await page.locator('[data-focus="lg-play"]').click();
+  await expect(page.locator(".player-screen video")).toHaveAttribute("src","https://example.test/live/globo.m3u8");
+  await page.locator('[data-action="close-player"]').click();
+  await expect(page.locator(".lg-v5-preview-open")).toBeVisible();
+});
+test("LG films present full poster images, production year and title search",async({page})=>{
+  const titles=["Aventura Um (2012)","Aventura Dois (2018)","Drama Original (2020)",
+    "Uma Boa História (2015)","A Grande Aventura (1999)","Mais um Filme (2010)",
+    "Cinema Agora (2021)","A Fuga (2017)"];
+  const entries=titles.map((title,i)=>'#EXTINF:-1 group-title="Filmes | Drama"'+
+    ' tvg-logo="https://example.test/poster-'+i+'.jpg",'+title+
+    '\nhttps://example.test/movie/'+i+'.mp4');
+  await importM3U(page,entries,"Filmes com cartazes");
+  await page.locator('[data-focus="nav-movies"]').click();
+  await expect(page.locator(".lg-v5-film-card")).toHaveCount(8);
+  await expect(page.locator(".lg-v5-film-year").first()).toHaveText("2012");
+  await expect(page.locator(".lg-v5-film-poster").first().locator("img")).toHaveAttribute("src","https://example.test/poster-0.jpg");
+  await expect(page.locator(".lg-v5-film-poster").first().locator("img")).toHaveCSS("object-fit","cover");
+  await page.locator('[data-input="lg-movie-search"]').fill("Fuga");
+  await expect(page.locator(".lg-v5-film-card")).toHaveCount(1);
+  await expect(page.locator(".lg-v5-film-card")).toContainText("A Fuga");
 });
