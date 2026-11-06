@@ -1,5 +1,16 @@
 # Registro de alterações — AURORA IPTV TV
 
+## 0.5.3 — LG webOS: diagnóstico da M3U, filmes, logos e alternativa HLS
+
+- **Filmes:** identifica marcadores explícitos [Cinema] e formatos VOD em grupos mistos, melhora S01 E02/T01 Episódio e classifica por gênero real ou coleção do group-title (Cinema e Ficção). Remove a marca [Cinema] dos títulos exibidos sem alterar o título original ou o ano fornecido na lista.
+- **Catálogo desconhecido:** apresenta em Configurações os principais grupos de origem e contagens dos itens que continuam sem classificação. Não imprime URLs, tokens nem senhas.
+- **Canais:** usa tvg-logo, reaproveita imagem de variante HD/SD/FHD e, quando a lista não fornece o logo de uma afiliada Globo, oferece o logo geral da TV Globo de Wikimedia Commons. Não inventa logos regionais.
+- **Player:** mensagens distinguem MPEG-TS/HLS, rede e codec; quando a URL segue padrão Xtream live/*.ts, o erro oferece uma tentativa opcional de *.m3u8 no mesmo servidor. Não reescreve o catálogo nem altera favoritos.
+- A LG webOS TV 26 documenta suporte dependente de codec e hardware; o Simulator pode não reproduzir algumas fontes. A existência de uma alternativa HLS não garante suporte do fornecedor.
+- Cobertura: testes de mídia, marcadores de filmes, agrupamentos, logotipos e diagnósticos, além da navegação existente. Android TV/Tizen/VIDAA sem alterações intencionais.
+
+
+
 ## 0.5.2 — LG webOS (06/11/2026)
 
 - Categorias limpas, capitalização normalizada e logos ao lado dos canais.
