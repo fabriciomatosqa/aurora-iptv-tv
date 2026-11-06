@@ -12,6 +12,9 @@ function typeFor(item) {
   const group=String(item?.group||"");
   const title=String(item?.title||"");
   const url=String(item?.url||"");
+  // "24H" entries describe linear channels (even when the provider puts
+  // them under a Series group). Do not turn American Dad 24H into a TV show.
+  if(/^\s*\[(?:24\s*h|24\s*horas|24\/7)\]/i.test(title))return "live";
   const isEpisode=EPISODE.test(title);
   if(isEpisode)return "series";
   // Structural evidence from user-provided URLs has priority over mixed group labels.

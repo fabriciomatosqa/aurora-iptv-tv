@@ -141,3 +141,28 @@ A auditoria detalhada está em docs/auditoria-tv-2026-11-05.md. Não foi
 certificada compatibilidade com codecs em hardware LG real; o registro
 monolítico no IndexedDB ainda precisa evoluir para gravação incremental por item.
 
+
+## LG 0.5.1 — grupos reais em vez de catálogos genéricos
+
+Quando o IPTV não declara uma plataforma, a primeira coluna usa **categorias reais da
+M3U** (\`group-title\`) com rótulo indicando a origem. Exemplo: um canal com
+\`group-title="Canais | Esportes"\` aparece em \`Categoria da lista: Esportes\`,
+não em uma plataforma inventada. Um grupo \`♦ Netflix\` pode ser reconhecido
+como Netflix, mas não se assume que qualquer conteúdo que tenha "Netflix" no
+título seja distribuído pela Netflix.
+
+A classificação agora trata \`[24H] American Dad 09\` como transmissão Ao Vivo,
+mesmo se o provedor o incluir em Séries. Isso impede criar uma série com
+episódios inexistentes. Séries com marcações \`S01 E02\`, \`1x03\` e
+\`T01 Episódio 04\` são reunidas pelo nome do programa, e temporadas
+identificadas no título são separadas visualmente.
+
+**A versão LG utiliza a M3U já importada; não apaga dados existentes.** Quando
+o arquivo ou grupo de origem é incompleto, o app continua mostrando essa
+limitação, sem inventar plataforma, gênero ou EPG. O Simulator 26 não
+garante suporte aos codecs de uma televisão LG real.
+
+Para instalar: branch \`feature/lg-webos-catalog-organization-v051\` →
+GitHub Actions → Build LG webOS developer IPK → execução aprovada → artefato
+\`aurora-iptv-tv-lg-simulator-folder\` → extrair → selecionar pasta com
+\`appinfo.json\` no Simulator.

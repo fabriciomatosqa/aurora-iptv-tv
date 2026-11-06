@@ -1,5 +1,18 @@
 # Registro de alterações — AURORA IPTV TV
 
+## 0.5.1 — LG webOS: catálogo organizado por fontes da M3U
+
+- **Canal [24H]:** transmissões lineares com o marcador explícito [24H] deixam de aparecer como episódios e passam para Ao Vivo, mesmo quando o grupo do provedor é chamado "Séries".
+- **Plataformas x grupos:** reconhece nomes decorados como ♦ Netflix e ✦ Crunchyroll. Onde falta plataforma confiável, usa a categoria real de \`group-title\` como "Categoria da lista: Esportes", "Categoria da lista: Doramas", sem atribuir uma plataforma fictícia.
+- **Séries:** melhora o agrupamento de títulos com \`S01E01\`, \`S01 E02\`, \`1x03\` ou \`T01 Episódio 04\`, preservando programas distintos. Episódios com temporadas identificáveis agora exibem separadores de temporada.
+- **Migração:** os itens já existentes no IndexedDB são reclassificados ao abrir o aplicativo; playlists, URLs, favoritos, retomada e PIN permanecem no armazenamento atual.
+- **Interface LG:** rótulos da primeira coluna informam quando os grupos vêm diretamente da M3U. As telas Ao Vivo, Filmes e Séries continuam com três colunas.
+- **Testes:** casos com canais [24H], coleções Netflix decoradas, agrupamento por série, fallback de grupos de origem e restauração do catálogo após fechar/abrir o Simulator.
+
+Observação: informações que a M3U realmente não fornece não podem ser inventadas. Para avaliar a origem de entradas ambíguas, use a seção Sem classificação e os contadores em Configurações.
+
+
+
 ## 0.5.0 — LG webOS: revisão técnica e desempenho (05/11/2026)
 
 - Análise das plataformas e testes documentada em docs/auditoria-tv-2026-11-05.md.

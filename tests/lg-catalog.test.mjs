@@ -127,3 +127,29 @@ test("LG migration deduplicates old cache but never alters favorite/position URL
   assert.equal(older.length,3);
   assert.strictEqual(dedupeLgItems(result.items).items,result.items);
 });
+
+test("LG [24H] broadcasts are live even when their source group says Séries",()=>{
+  const text=[
+    "#EXTM3U",
+    '#EXTINF:-1 group-title="Séries | ♦ Netflix",[24H] American Dad 09',
+    "https://example.test/linear-american-dad.m3u8",
+    '#EXTINF:-1 group-title="Séries | ♦ Netflix",[24H] As Visões da Raven',
+    "https://example.test/linear-raven.m3u8",
+    '#EXTINF:-1 group-title="Séries | ♦ Netflix",American Dad S02 E09',
+    "https://example.test/series/real-episode.mp4"
+  ].join("\n");
+  const parsed=parseLgM3U(text);
+  assert.deepEqual(parsed.items.map(i=>i.type),["live","live","series"]);
+  const prior=parsed.items.map(i=>({...i,type:"series"}));
+  assert.equal(reclassifyLgItems(prior),2);
+  assert.equal(auditLgCatalog(prior).live,2);
+  assert.equal(auditLgCatalog(prior).series,1);
+});
+test("LG does not erase source group-title or URLs when reclassifying 24H",()=>{
+  const item={title:"[24H] Simpsons 08",group:"Séries | Desenhos",url:"https://example.test/x",
+    tvgId:"",type:"series"};
+  assert.equal(reclassifyLgItems([item]),1);
+  assert.equal(item.type,"live");
+  assert.equal(item.group,"Séries | Desenhos");
+  assert.equal(item.url,"https://example.test/x");
+});
