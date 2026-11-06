@@ -109,9 +109,9 @@ function addCard(item, label = "") {
   const media = safeMedia(item.logo);
   const title = esc(item.title);
   if(lgTv && route==="movies" && item.type==="movies"){
-    const found=/\\b\\(?((?:19|20)\\d{2})\\)?(?=\\s*$)/.exec(item.title||"");
+    const found=/\(((?:19|20)\d{2})\)\s*$/.exec(item.title||"");
     const year=found?found[1]:"";
-    const cleanTitle=esc(String(item.title||"").replace(/\\s*\\((?:19|20)\\d{2}\\)\\s*$/,"").trim());
+    const cleanTitle=esc(String(item.title||"").replace(/\s*\((?:19|20)\d{2}\)\s*$/,"").trim());
     const art=media?'<img loading="lazy" src="'+esc(media)+'" alt="" onerror="this.remove()">':
       '<span class="lg-v5-film-fallback">'+esc(String(item.title||"F").slice(0,1))+'</span>';
     return '<button class="card lg-v5-film-card" data-action="item" data-index="'+index+
