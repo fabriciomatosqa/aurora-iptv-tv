@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import {lgBrowseModel,lgPlatform,lgGenre,lgSourceCategory,lgSourceBucket,lgNormalizeGroupName,lgDisplayBucket,lgSeriesTitle,lgSeriesGroups,lgEpgForChannel,lgMatchSchedule,invalidateLgBrowserIndex,PLATFORM_UNKNOWN,GENRE_UNKNOWN} from "../src/core/lg-browser.mjs";
+import {lgBrowseModel,lgPlatform,lgGenre,lgSourceCategory,lgSourceBucket,lgNormalizeGroupName,lgDisplayBucket,lgMovieDisplayParts,lgSeriesTitle,lgSeriesGroups,lgEpgForChannel,lgMatchSchedule,invalidateLgBrowserIndex,PLATFORM_UNKNOWN,GENRE_UNKNOWN} from "../src/core/lg-browser.mjs";
 import {lgEpgMarkup,lgRail,lgMovieMarkup,lgEpisodesMarkup,lgFootballHomeMarkup} from "../src/core/lg-browser-view.mjs";
 
 const E=String.raw;
@@ -223,4 +223,32 @@ test("LG film source collections are derived only from real M3U groups",()=>{
   assert.equal(model.platforms.length,2);
   assert.deepEqual(model.platforms.map(x=>x.key),["Categoria da lista: Sessão Brasileira",PLATFORM_UNKNOWN]);
   assert.deepEqual(model.movies.map(x=>x.title),["Aventura (2022)"]);
+});
+
+test("LG movie browser promotes real Cinema group to primary collection instead of fake genre",()=>{
+  const list=[
+    film("Homem-Aranha: Um Novo Dia [Cinema] (2026)","Filmes | Cinema"),
+    film("Moana [Cinema] (2026)","Filmes | Cinema"),
+    film("Aventura Dramática (2012)","Filmes | Drama"),
+    film("Interestelar (2014)","Filmes | Ficcao")
+  ];
+  const all=lgBrowseModel("movies",list,null,{});
+  assert.ok(all.genres.some(x=>x.key==="Categoria da lista: Cinema"));
+  assert.ok(all.genres.some(x=>x.key==="Drama"));
+  assert.ok(all.genres.some(x=>x.key==="Ficção"));
+  const cinema=lgBrowseModel("movies",list,null,{genre:"Categoria da lista: Cinema"});
+  assert.deepEqual(cinema.movies.map(x=>x.title),[
+    "Homem-Aranha: Um Novo Dia [Cinema] (2026)","Moana [Cinema] (2026)"
+  ]);
+  assert.deepEqual(cinema.platforms.map(x=>x.key),[PLATFORM_UNKNOWN]);
+});
+test("LG movie titles drop user-supplied Cinema badges but preserve legitimate year",()=>{
+  assert.deepEqual(lgMovieDisplayParts({title:"Homem-Aranha: Um Novo Dia [Cinema] (2026)"}),
+    {title:"Homem-Aranha: Um Novo Dia",year:"2026",quality:""});
+  assert.deepEqual(lgMovieDisplayParts({title:"Moana (2026) [Cinema]"}),
+    {title:"Moana",year:"2026",quality:""});
+  assert.deepEqual(lgMovieDisplayParts({title:"A Origem [Cinema]"}),
+    {title:"A Origem",year:"",quality:""});
+  assert.deepEqual(lgMovieDisplayParts({title:"Um Filme sem Metadados"}),
+    {title:"Um Filme sem Metadados",year:"",quality:""});
 });
