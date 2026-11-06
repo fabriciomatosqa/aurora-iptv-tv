@@ -92,8 +92,8 @@ export function lgMovieMarkup(model,cards,query=""){
   const shown=normalized?model.movies.filter(item=>
     String(item.title||"").normalize("NFD").replace(/[\u0300-\u036f]/g,"")
       .toLocaleLowerCase("pt-BR").includes(normalized)):model.movies;
-  const genre=model.genre==="Gênero não informado"?"Outros filmes":model.genre;
-  const platform=model.platform==="Plataforma não informada"?"Da sua lista":lgDisplayBucket(model.platform);
+  const genre=model.genre==="Gênero não informado"?"Sem categoria definida":lgDisplayBucket(model.genre);
+  const platform=model.platform==="Plataforma não informada"?"Da playlist":lgDisplayBucket(model.platform);
   return '<div class="lg-v4-third-title lg-v5-movie-heading"><span class="lg-v4-overline">BIBLIOTECA DE FILMES</span>'+
    '<h2>'+safe(genre)+'</h2><p>'+safe(platform)+' · '+n(model.movies.length)+' títulos disponíveis</p></div>'+
    (model.movies.length>6?'<label class="lg-v5-movie-search-label" for="lg-movie-search">'+
