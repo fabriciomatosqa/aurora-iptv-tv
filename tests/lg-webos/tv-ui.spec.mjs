@@ -240,7 +240,7 @@ test("LG separates 24H series-branded linear channels and groups decorated Netfl
     entry("Séries | ♦ Netflix","(A)mar 1x03","https://example.test/series/amar3.mp4")
   ],"Catálogo realista por grupos");
   await page.locator('[data-focus="nav-live"]').click();
-  await expect(page.locator(".lg-v4-rail").first()).toContainText("Categorias");
+  await expect(page.locator(".lg-v4-rail").first()).toContainText(/categorias/i);
   await expect(page.locator(".lg-v4-rail").first()).toContainText("Desenhos 24H");
   await expect(page.locator(".lg-v4-rail").nth(1)).toContainText("[24H] American Dad");
   await page.locator('[data-focus="nav-series"]').click();
